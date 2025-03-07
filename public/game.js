@@ -18,29 +18,48 @@ document.addEventListener('DOMContentLoaded', () => {
     let myId = null;
     let playerName = '';
 
-    // Configuración del canvas para pantalla completa
-    function ajustarCanvas() {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+    // Sistema de sonidos
+    const sounds = {
+        shoot: new Audio('https://assets.mixkit.co/active_storage/sfx/2771/2771-preview.mp3'),
+        explosion: new Audio('https://assets.mixkit.co/active_storage/sfx/1234/1234-preview.mp3'),
+        respawn: new Audio('https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3')
+    };
+
+    function playSound(soundName) {
+        if (sounds[soundName]) {
+            sounds[soundName].currentTime = 0;
+            sounds[soundName].play().catch(e => console.log('Error playing sound:', e));
+        }
     }
 
-    // Ajustar canvas inicialmente y cuando cambie el tamaño de la ventana
-    ajustarCanvas();
-    window.addEventListener('resize', ajustarCanvas);
+    // Clase Bala
+    class Bullet {
+        constructor(x, y, angle) {
+            this.x = x;
+            this.y = y;
+            this.speed = 15;
+            this.size = 5;
+            this.angle = angle;
+            this.distance = 0;
+            this.maxDistance = 800;
+        }
 
-    // Función para actualizar el tablero de puntuaciones
-    function updateScoreboard() {
-        const scores = Array.from(players.values())
-            .sort((a, b) => b.score - a.score)
-            .slice(0, 10);
+        draw() {
+            ctx.fillStyle = 'yellow';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            ctx.fill();
+        }
 
-        scoreList.innerHTML = scores
-            .map((player, index) => `
-                <div class="score-item">
-                    ${index + 1}. ${player.name}: ${player.score}
-                </div>
-            `)
-            .join('');
+        update() {
+            this.x += Math.cos(this.angle) * this.speed;
+            this.y += Math.sin(this.angle) * this.speed;
+            this.distance += this.speed;
+
+            return this.distance < this.maxDistance &&
+                   this.x > 0 && this.x < canvas.width &&
+                   this.y > 0 && this.y < canvas.height;
+        }
     }
 
     // Clase Jugador
@@ -53,17 +72,16 @@ document.addEventListener('DOMContentLoaded', () => {
             this.size = 30;
             this.speed = 7;
             this.score = 0;
-            this.bullets = [];         // Array para las balas
-            this.isDead = false;       // Estado de muerte
-            this.respawnTime = 0;      // Tiempo para reaparecer
-            this.lastShot = 0;         // Control de cadencia de disparo
-            this.health = 100;         // Salud del jugador
-            this.lastDamageFrom = null; // Guardar quién hizo el último daño
+            this.bullets = [];
+            this.isDead = false;
+            this.respawnTime = 0;
+            this.lastShot = 0;
+            this.health = 100;
+            this.lastDamageFrom = null;
         }
 
         draw() {
             if (this.isDead) {
-                // Animación de muerte (explosión)
                 ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.size * (1 + Math.sin(Date.now() / 100)), 0, Math.PI * 2);
@@ -71,7 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // Dibujar círculo del jugador
+            // Dibujar jugador
             ctx.fillStyle = this.color;
             ctx.beginPath();
             ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
@@ -85,7 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.fillStyle = 'green';
             ctx.fillRect(this.x - healthBarWidth/2, this.y - this.size - 15, healthBarWidth * (this.health/100), healthBarHeight);
 
-            // Dibujar nombre y puntuación
+            // Nombre y puntuación
             ctx.fillStyle = 'white';
             ctx.font = '16px Arial';
             ctx.textAlign = 'center';
@@ -97,19 +115,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         shoot(targetX, targetY) {
             const now = Date.now();
-            if (now - this.lastShot > 250) { // Cadencia de disparo: 250ms
+            if (now - this.lastShot > 250) {
                 const angle = Math.atan2(targetY - this.y, targetX - this.x);
                 this.bullets.push(new Bullet(this.x, this.y, angle));
                 this.lastShot = now;
-
-                // Efecto de sonido de disparo
                 playSound('shoot');
             }
         }
 
         takeDamage(damage, attackerId) {
             this.health -= damage;
-            this.lastDamageFrom = attackerId; // Guardar quién hizo el último daño
+            this.lastDamageFrom = attackerId;
             
             if (this.health <= 0 && !this.isDead) {
                 this.die();
@@ -122,7 +138,6 @@ document.addEventListener('DOMContentLoaded', () => {
             this.respawnTime = Date.now() + 3000;
             playSound('explosion');
             
-            // Emitir evento de muerte al servidor
             if (socket && socket.connected) {
                 socket.emit('playerDied', {
                     id: myId,
@@ -140,7 +155,6 @@ document.addEventListener('DOMContentLoaded', () => {
             this.lastDamageFrom = null;
             playSound('respawn');
 
-            // Emitir evento de respawn
             if (socket && socket.connected) {
                 socket.emit('playerRespawn', {
                     id: myId,
@@ -158,67 +172,49 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // Movimiento normal
             if (keys.ArrowLeft) this.x -= this.speed;
             if (keys.ArrowRight) this.x += this.speed;
             if (keys.ArrowUp) this.y -= this.speed;
             if (keys.ArrowDown) this.y += this.speed;
 
-            // Mantener al jugador dentro del canvas
             this.x = Math.max(this.size, Math.min(canvas.width - this.size, this.x));
             this.y = Math.max(this.size, Math.min(canvas.height - this.size, this.y));
 
-            // Actualizar balas
             this.bullets = this.bullets.filter(bullet => bullet.update());
         }
     }
 
-    // Nueva clase para las balas
-    class Bullet {
-        constructor(x, y, angle) {
-            this.x = x;
-            this.y = y;
-            this.speed = 15;
-            this.size = 5;
-            this.angle = angle;
-            this.distance = 0;
-            this.maxDistance = 800; // Distancia máxima que recorre la bala
-        }
-
-        draw() {
-            ctx.fillStyle = 'yellow';
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-            ctx.fill();
-        }
-
-        update() {
-            this.x += Math.cos(this.angle) * this.speed;
-            this.y += Math.sin(this.angle) * this.speed;
-            this.distance += this.speed;
-
-            // Verificar si la bala está fuera de los límites
-            return this.distance < this.maxDistance &&
-                   this.x > 0 && this.x < canvas.width &&
-                   this.y > 0 && this.y < canvas.height;
-        }
+    // Configuración del canvas
+    function ajustarCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
     }
 
-    // Sistema de sonidos
-    const sounds = {
-        shoot: new Audio('https://assets.mixkit.co/active_storage/sfx/2771/2771-preview.mp3'),
-        explosion: new Audio('https://assets.mixkit.co/active_storage/sfx/1234/1234-preview.mp3'),
-        respawn: new Audio('https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3')
+    ajustarCanvas();
+    window.addEventListener('resize', ajustarCanvas);
+
+    // Control de teclas
+    const keys = {
+        ArrowLeft: false,
+        ArrowRight: false,
+        ArrowUp: false,
+        ArrowDown: false
     };
 
-    function playSound(soundName) {
-        if (sounds[soundName]) {
-            sounds[soundName].currentTime = 0;
-            sounds[soundName].play().catch(e => console.log('Error playing sound:', e));
+    window.addEventListener('keydown', (e) => {
+        if (keys.hasOwnProperty(e.key)) {
+            keys[e.key] = true;
+            e.preventDefault();
         }
-    }
+    });
 
-    // En el evento click del canvas para disparar
+    window.addEventListener('keyup', (e) => {
+        if (keys.hasOwnProperty(e.key)) {
+            keys[e.key] = false;
+        }
+    });
+
+    // Manejo de disparos
     canvas.addEventListener('click', (e) => {
         if (myId && players.has(myId)) {
             const player = players.get(myId);
@@ -228,13 +224,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 const y = e.clientY - rect.top;
                 player.shoot(x, y);
 
-                // Emitir evento de disparo
                 socket.emit('playerShoot', { x, y });
             }
         }
     });
 
-    // En el gameLoop, añadir la detección de colisiones
+    // Funciones de actualización
+    function updatePlayerCount() {
+        playerCountElement.textContent = players.size;
+        updateScoreboard();
+    }
+
+    function updateScoreboard() {
+        const scores = Array.from(players.values())
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 10);
+
+        scoreList.innerHTML = scores
+            .map((player, index) => `
+                <div class="score-item">
+                    ${index + 1}. ${player.name}: ${player.score}
+                </div>
+            `)
+            .join('');
+    }
+
     function checkBulletCollisions() {
         players.forEach((player, playerId) => {
             if (player.isDead) return;
@@ -249,7 +263,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     if (distance < player.size + bullet.size) {
                         player.takeDamage(25, otherPlayerId);
-                        otherPlayer.bullets.splice(bulletIndex, 1); // Eliminar la bala
+                        otherPlayer.bullets.splice(bulletIndex, 1);
 
                         if (player.isDead) {
                             otherPlayer.score += 1;
@@ -261,29 +275,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Control de teclas
-    const keys = {
-        ArrowLeft: false,
-        ArrowRight: false,
-        ArrowUp: false,
-        ArrowDown: false
-    };
-
-    // Eventos de teclado
-    window.addEventListener('keydown', (e) => {
-        if (keys.hasOwnProperty(e.key)) {
-            keys[e.key] = true;
-            e.preventDefault();
-        }
-    });
-
-    window.addEventListener('keyup', (e) => {
-        if (keys.hasOwnProperty(e.key)) {
-            keys[e.key] = false;
-        }
-    });
-
-    // Manejar entrada de chat
+    // Chat
     chatInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter' && chatInput.value.trim() && myId) {
             const message = chatInput.value.trim();
@@ -298,22 +290,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Función para actualizar contador de jugadores
-    function updatePlayerCount() {
-        playerCountElement.textContent = players.size;
-        updateScoreboard();
-    }
-
-    // Iniciar el juego
+    // Iniciar juego
     function startGame() {
         playerName = nombreInput.value.trim();
         menuInicial.style.display = 'none';
         gameContainer.style.display = 'block';
         
-        // Conectar con Socket.IO
         socket = io();
 
-        // Eventos de Socket.IO
         socket.on('connect', () => {
             console.log('¡Conectado al servidor!');
         });
@@ -338,7 +322,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 player.health = data.health;
                 player.isDead = data.isDead;
                 
-                // Actualizar las balas
                 player.bullets = data.bullets.map(b => {
                     const bullet = new Bullet(b.x, b.y, 0);
                     bullet.x = b.x;
@@ -356,6 +339,32 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
+        socket.on('playerDied', (data) => {
+            if (players.has(data.id)) {
+                const player = players.get(data.id);
+                player.isDead = true;
+                player.health = 0;
+                player.respawnTime = Date.now() + 3000;
+                
+                if (data.killerId === myId) {
+                    const myPlayer = players.get(myId);
+                    myPlayer.score += 1;
+                    updateScoreboard();
+                }
+            }
+        });
+
+        socket.on('playerRespawn', (data) => {
+            if (players.has(data.id)) {
+                const player = players.get(data.id);
+                player.isDead = false;
+                player.health = 100;
+                player.x = data.x;
+                player.y = data.y;
+                player.bullets = [];
+            }
+        });
+
         socket.on('playerDisconnected', (id) => {
             players.delete(id);
             updatePlayerCount();
@@ -369,36 +378,14 @@ document.addEventListener('DOMContentLoaded', () => {
             chatMessages.scrollTop = chatMessages.scrollHeight;
         });
 
-        socket.on('playerDied', (data) => {
-            if (players.has(data.id)) {
-                const player = players.get(data.id);
-                player.isDead = true;
-                player.health = 0;
-                player.respawnTime = Date.now() + 3000;
-        // Iniciar bucle del juego
         gameLoop();
     }
 
-    // Habilitar/deshabilitar botón de jugar según el nombre
-    nombreInput.addEventListener('input', () => {
-        botonJugar.disabled = nombreInput.value.trim().length < 2;
-    });
-    botonJugar.disabled = true;
-
-    // Evento del botón jugar
-    botonJugar.addEventListener('click', startGame);
-    nombreInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter' && !botonJugar.disabled) {
-            startGame();
-        }
-    });
-
-    // Bucle principal del juego
+    // Game Loop
     function gameLoop() {
         ctx.fillStyle = '#2a2a2a';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Actualizar y dibujar jugadores
         if (myId && players.has(myId)) {
             const myPlayer = players.get(myId);
             myPlayer.update(keys);
@@ -421,9 +408,16 @@ document.addEventListener('DOMContentLoaded', () => {
         requestAnimationFrame(gameLoop);
     }
 
-    // Inicializar anuncios
-    window.onload = function() {
-        (adsbygoogle = window.adsbygoogle || []).push({});
-        (adsbygoogle = window.adsbygoogle || []).push({});
-    };
+    // Eventos del menú inicial
+    nombreInput.addEventListener('input', () => {
+        botonJugar.disabled = nombreInput.value.trim().length < 2;
+    });
+    botonJugar.disabled = true;
+
+    botonJugar.addEventListener('click', startGame);
+    nombreInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && !botonJugar.disabled) {
+            startGame();
+        }
+    });
 }); 
