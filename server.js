@@ -74,6 +74,19 @@ io.on('connection', (socket) => {
             });
         }
     });
+
+    // Manejar mensajes de chat
+    socket.on('chatMessage', (data) => {
+        // Evitar inyección HTML básica
+        const sanitizedMessage = data.message
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+        
+        io.emit('chatMessage', {
+            name: data.name,
+            message: sanitizedMessage
+        });
+    });
 });
 
 const PORT = process.env.PORT || 3000;

@@ -8,6 +8,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const playerCountElement = document.getElementById('playerCount');
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
+    const chatMessages = document.getElementById('chatMessages');
+    const chatInput = document.getElementById('chatInput');
+    const scoreList = document.getElementById('scoreList');
 
     // Configuración del canvas para pantalla completa
     function ajustarCanvas() {
@@ -127,9 +130,51 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Actualizar contador de jugadores
+    // Función para actualizar el tablero de puntuaciones
+    function updateScoreboard() {
+        const scores = Array.from(players.values())
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 10);
+
+        scoreList.innerHTML = scores
+            .map((player, index) => `
+                <div class="score-item">
+                    ${index + 1}. ${player.name}: ${player.score}
+                </div>
+            `)
+            .join('');
+    }
+
+    // Manejar entrada de chat
+    chatInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && chatInput.value.trim() && myId) {
+            const message = chatInput.value.trim();
+            const myPlayer = players.get(myId);
+            
+            // Emitir mensaje al servidor
+            socket.emit('chatMessage', {
+                name: myPlayer.name,
+                message: message
+            });
+
+            // Limpiar input
+            chatInput.value = '';
+        }
+    });
+
+    // En los eventos de Socket.IO, agregar:
+    socket.on('chatMessage', (data) => {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'chat-message';
+        messageDiv.innerHTML = `<span class="player-name">${data.name}:</span> ${data.message}`;
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    });
+
+    // Modificar la función updatePlayerCount para incluir actualización del scoreboard
     function updatePlayerCount() {
         playerCountElement.textContent = players.size;
+        updateScoreboard();
     }
 
     // Iniciar el juego
