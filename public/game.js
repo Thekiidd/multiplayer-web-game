@@ -39,6 +39,8 @@ document.addEventListener('DOMContentLoaded', () => {
             this.name = name;
             this.size = 30;
             this.speed = 7;
+            this.score = 0;
+            this.powerUp = null;
         }
 
         draw() {
@@ -48,11 +50,18 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
             ctx.fill();
 
-            // Dibujar nombre del jugador
+            // Efecto de power-up
+            if (this.powerUp) {
+                ctx.strokeStyle = '#FFD700';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+            }
+
+            // Dibujar nombre y puntuación
             ctx.fillStyle = 'white';
             ctx.font = '16px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText(this.name, this.x, this.y - this.size - 5);
+            ctx.fillText(`${this.name} (${this.score})`, this.x, this.y - this.size - 5);
         }
 
         update(keys) {
@@ -65,7 +74,36 @@ document.addEventListener('DOMContentLoaded', () => {
             this.x = Math.max(this.size, Math.min(canvas.width - this.size, this.x));
             this.y = Math.max(this.size, Math.min(canvas.height - this.size, this.y));
         }
+
+        // Método para detectar colisiones
+        collidesWith(otherPlayer) {
+            const dx = this.x - otherPlayer.x;
+            const dy = this.y - otherPlayer.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            return distance < this.size + otherPlayer.size;
+        }
     }
+
+    // Clase para power-ups
+    class PowerUp {
+        constructor() {
+            this.x = Math.random() * (canvas.width - 40) + 20;
+            this.y = Math.random() * (canvas.height - 40) + 20;
+            this.size = 15;
+            this.type = Math.random() < 0.5 ? 'speed' : 'size';
+        }
+
+        draw() {
+            ctx.fillStyle = this.type === 'speed' ? '#FFD700' : '#FF4500';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    // Variables globales para power-ups
+    let powerUps = [];
+    let lastPowerUpTime = 0;
 
     // Control de teclas
     const keys = {
@@ -172,9 +210,64 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Bucle principal del juego
     function gameLoop() {
-        // Limpiar canvas
         ctx.fillStyle = '#2a2a2a';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Generar power-ups cada 10 segundos
+        const currentTime = Date.now();
+        if (currentTime - lastPowerUpTime > 10000 && powerUps.length < 3) {
+            powerUps.push(new PowerUp());
+            lastPowerUpTime = currentTime;
+        }
+
+        // Dibujar power-ups
+        powerUps.forEach((powerUp, index) => {
+            powerUp.draw();
+            
+            // Verificar colisiones con jugadores
+            players.forEach(player => {
+                const dx = player.x - powerUp.x;
+                const dy = player.y - powerUp.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < player.size + powerUp.size) {
+                    // Aplicar efecto
+                    if (powerUp.type === 'speed') {
+                        player.speed = 12;
+                    } else {
+                        player.size = 45;
+                    }
+                    player.powerUp = powerUp.type;
+                    
+                    // Eliminar power-up
+                    powerUps.splice(index, 1);
+                    
+                    // Programar fin del power-up
+                    setTimeout(() => {
+                        player.speed = 7;
+                        player.size = 30;
+                        player.powerUp = null;
+                    }, 5000);
+                }
+            });
+        });
+
+        // Verificar colisiones entre jugadores
+        if (myId && players.has(myId)) {
+            const myPlayer = players.get(myId);
+            players.forEach((otherPlayer, id) => {
+                if (id !== myId && myPlayer.collidesWith(otherPlayer)) {
+                    // El jugador más grande gana
+                    if (myPlayer.size > otherPlayer.size) {
+                        myPlayer.score += 1;
+                        socket.emit('playerScored', {
+                            id: myId,
+                            score: myPlayer.score
+                        });
+                    }
+                }
+            });
+        }
 
         // Actualizar mi jugador
         if (myId && players.has(myId)) {

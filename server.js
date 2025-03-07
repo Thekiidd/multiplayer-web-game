@@ -62,6 +62,18 @@ io.on('connection', (socket) => {
             name: data.name
         });
     });
+
+    // Manejar puntuación
+    socket.on('playerScored', (data) => {
+        if (players.has(data.id)) {
+            const player = players.get(data.id);
+            player.score = data.score;
+            socket.broadcast.emit('scoreUpdate', {
+                id: data.id,
+                score: data.score
+            });
+        }
+    });
 });
 
 const PORT = process.env.PORT || 3000;
