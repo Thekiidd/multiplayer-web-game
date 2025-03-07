@@ -9,25 +9,23 @@
     <script src="/socket.io/socket.io.js"></script>
     <!-- Script del juego -->
     <script src="game.js" defer></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
+    <!-- Menú de selección de plataforma -->
+    <div id="menuPlataforma">
+        <div class="menu-contenido">
+            <h1>Selecciona tu plataforma</h1>
+            <button id="botonWeb" class="menu-boton">Web (Teclado y Ratón)</button>
+            <button id="botonMovil" class="menu-boton">Móvil (Joysticks)</button>
+        </div>
+    </div>
+
     <!-- Menú Inicial -->
-    <div id="menuInicial">
+    <div id="menuInicial" style="display: none;">
         <div class="menu-contenido">
             <h1>¡Bienvenido al Juego!</h1>
             <input type="text" id="nombreJugador" class="menu-input" placeholder="Ingresa tu nombre" maxlength="15">
             <button id="botonJugar" class="menu-boton">¡Jugar!</button>
-            <button id="botonAmor" class="menu-boton amor">Para mi Amorcito ❤️</button>
-        </div>
-    </div>
-
-    <!-- Nuevo contenedor para el mensaje de amor -->
-    <div id="mensajeAmor" style="display: none;">
-        <div class="amor-contenido">
-            <div id="corazon3D"></div>
-            <p class="mensaje-amor">Cada día me enamoro más de ti. ¡Que tengas un hermoso día! ❤️</p>
-            <button id="volverMenu" class="menu-boton">Volver al Menú</button>
         </div>
     </div>
 
@@ -38,8 +36,8 @@
             Jugadores: <span id="playerCount">0</span>
         </div>
         
-        <!-- Agregamos los controles móviles -->
-        <div id="mobileControls">
+        <!-- Controles móviles -->
+        <div id="mobileControls" style="display: none;">
             <div id="moveJoystick" class="joystick">
                 <div class="joystick-base">
                     <div class="joystick-stick"></div>
