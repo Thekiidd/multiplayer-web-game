@@ -9,6 +9,7 @@
     <script src="/socket.io/socket.io.js"></script>
     <!-- Script del juego -->
     <script src="game.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
     <!-- Menú Inicial -->
@@ -17,6 +18,16 @@
             <h1>¡Bienvenido al Juego!</h1>
             <input type="text" id="nombreJugador" class="menu-input" placeholder="Ingresa tu nombre" maxlength="15">
             <button id="botonJugar" class="menu-boton">¡Jugar!</button>
+            <button id="botonAmor" class="menu-boton amor">Para mi Amorcito ❤️</button>
+        </div>
+    </div>
+
+    <!-- Nuevo contenedor para el mensaje de amor -->
+    <div id="mensajeAmor" style="display: none;">
+        <div class="amor-contenido">
+            <div id="corazon3D"></div>
+            <p class="mensaje-amor">Cada día me enamoro más de ti. ¡Que tengas un hermoso día! ❤️</p>
+            <button id="volverMenu" class="menu-boton">Volver al Menú</button>
         </div>
     </div>
 

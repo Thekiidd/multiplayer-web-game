@@ -11,6 +11,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const chatMessages = document.getElementById('chatMessages');
     const chatInput = document.getElementById('chatInput');
     const scoreList = document.getElementById('scoreList');
+    const botonAmor = document.getElementById('botonAmor');
+    const mensajeAmor = document.getElementById('mensajeAmor');
+    const volverMenu = document.getElementById('volverMenu');
+    const corazon3D = document.getElementById('corazon3D');
 
     // Variables globales
     let socket;
@@ -479,5 +483,68 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Enter' && !botonJugar.disabled) {
             startGame();
         }
+    });
+
+    // Agregar Three.js para el corazón 3D
+    function crearCorazon3D() {
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(200, 200);
+        corazon3D.appendChild(renderer.domElement);
+
+        // Crear forma de corazón
+        const x = 0, y = 0;
+        const heartShape = new THREE.Shape();
+        heartShape.moveTo(x + 5, y + 5);
+        heartShape.bezierCurveTo(x + 5, y + 5, x + 4, y, x, y);
+        heartShape.bezierCurveTo(x - 6, y, x - 6, y + 7, x - 6, y + 7);
+        heartShape.bezierCurveTo(x - 6, y + 11, x - 3, y + 15.4, x + 5, y + 19);
+        heartShape.bezierCurveTo(x + 12, y + 15.4, x + 16, y + 11, x + 16, y + 7);
+        heartShape.bezierCurveTo(x + 16, y + 7, x + 16, y, x + 10, y);
+        heartShape.bezierCurveTo(x + 7, y, x + 5, y + 5, x + 5, y + 5);
+
+        const geometry = new THREE.ExtrudeGeometry(heartShape, {
+            depth: 2,
+            bevelEnabled: true,
+            bevelSegments: 2,
+            steps: 2,
+            bevelSize: 1,
+            bevelThickness: 1
+        });
+
+        const material = new THREE.MeshPhongMaterial({ 
+            color: 0xff4d6d,
+            shininess: 100
+        });
+
+        const heart = new THREE.Mesh(geometry, material);
+        scene.add(heart);
+
+        // Luz
+        const light = new THREE.DirectionalLight(0xffffff, 1);
+        light.position.set(0, 0, 5);
+        scene.add(light);
+
+        camera.position.z = 30;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            heart.rotation.y += 0.01;
+            renderer.render(scene, camera);
+        }
+        animate();
+    }
+
+    // Eventos para los botones
+    botonAmor.addEventListener('click', () => {
+        menuInicial.style.display = 'none';
+        mensajeAmor.style.display = 'flex';
+        crearCorazon3D();
+    });
+
+    volverMenu.addEventListener('click', () => {
+        mensajeAmor.style.display = 'none';
+        menuInicial.style.display = 'flex';
     });
 }); 
