@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juego Multijugador</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Script de Socket.IO -->
+    <script src="/socket.io/socket.io.js"></script>
+    <!-- Script del juego -->
+    <script src="game.js" defer></script>
+</head>
+<body>
+    <!-- Menú Inicial -->
+    <div id="menuInicial">
+        <div class="menu-contenido">
+            <h1>¡Bienvenido al Juego!</h1>
+            <input type="text" id="nombreJugador" class="menu-input" placeholder="Ingresa tu nombre" maxlength="15">
+            <button id="botonJugar" class="menu-boton">¡Jugar!</button>
+        </div>
+    </div>
+
+    <!-- Contenedor del Juego (inicialmente oculto) -->
+    <div class="game-container" style="display: none;">
+        <canvas id="gameCanvas"></canvas>
+        <div id="gameStatus">
+            Jugadores conectados: <span id="playerCount">0</span>
+        </div>
+    </div>
+</body>
+</html> 
