@@ -12,6 +12,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const chatInput = document.getElementById('chatInput');
     const scoreList = document.getElementById('scoreList');
 
+    // Variables globales
+    let socket;
+    const players = new Map();
+    let myId = null;
+    let playerName = '';
+
     // Configuración del canvas para pantalla completa
     function ajustarCanvas() {
         canvas.width = window.innerWidth;
@@ -22,16 +28,20 @@ document.addEventListener('DOMContentLoaded', () => {
     ajustarCanvas();
     window.addEventListener('resize', ajustarCanvas);
 
-    // Habilitar/deshabilitar botón de jugar según el nombre
-    nombreInput.addEventListener('input', () => {
-        botonJugar.disabled = nombreInput.value.trim().length < 2;
-    });
-    botonJugar.disabled = true;
+    // Función para actualizar el tablero de puntuaciones
+    function updateScoreboard() {
+        const scores = Array.from(players.values())
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 10);
 
-    // Estado del juego
-    const players = new Map();
-    let myId = null;
-    let playerName = '';
+        scoreList.innerHTML = scores
+            .map((player, index) => `
+                <div class="score-item">
+                    ${index + 1}. ${player.name}: ${player.score}
+                </div>
+            `)
+            .join('');
+    }
 
     // Clase Jugador
     class Player {
@@ -43,7 +53,6 @@ document.addEventListener('DOMContentLoaded', () => {
             this.size = 30;
             this.speed = 7;
             this.score = 0;
-            this.powerUp = null;
         }
 
         draw() {
@@ -52,13 +61,6 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.beginPath();
             ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
             ctx.fill();
-
-            // Efecto de power-up
-            if (this.powerUp) {
-                ctx.strokeStyle = '#FFD700';
-                ctx.lineWidth = 3;
-                ctx.stroke();
-            }
 
             // Dibujar nombre y puntuación
             ctx.fillStyle = 'white';
@@ -77,36 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
             this.x = Math.max(this.size, Math.min(canvas.width - this.size, this.x));
             this.y = Math.max(this.size, Math.min(canvas.height - this.size, this.y));
         }
-
-        // Método para detectar colisiones
-        collidesWith(otherPlayer) {
-            const dx = this.x - otherPlayer.x;
-            const dy = this.y - otherPlayer.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            return distance < this.size + otherPlayer.size;
-        }
     }
-
-    // Clase para power-ups
-    class PowerUp {
-        constructor() {
-            this.x = Math.random() * (canvas.width - 40) + 20;
-            this.y = Math.random() * (canvas.height - 40) + 20;
-            this.size = 15;
-            this.type = Math.random() < 0.5 ? 'speed' : 'size';
-        }
-
-        draw() {
-            ctx.fillStyle = this.type === 'speed' ? '#FFD700' : '#FF4500';
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-            ctx.fill();
-        }
-    }
-
-    // Variables globales para power-ups
-    let powerUps = [];
-    let lastPowerUpTime = 0;
 
     // Control de teclas
     const keys = {
@@ -120,7 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('keydown', (e) => {
         if (keys.hasOwnProperty(e.key)) {
             keys[e.key] = true;
-            e.preventDefault(); // Prevenir scroll con las flechas
+            e.preventDefault();
         }
     });
 
@@ -130,48 +103,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Función para actualizar el tablero de puntuaciones
-    function updateScoreboard() {
-        const scores = Array.from(players.values())
-            .sort((a, b) => b.score - a.score)
-            .slice(0, 10);
-
-        scoreList.innerHTML = scores
-            .map((player, index) => `
-                <div class="score-item">
-                    ${index + 1}. ${player.name}: ${player.score}
-                </div>
-            `)
-            .join('');
-    }
-
     // Manejar entrada de chat
     chatInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter' && chatInput.value.trim() && myId) {
             const message = chatInput.value.trim();
             const myPlayer = players.get(myId);
             
-            // Emitir mensaje al servidor
             socket.emit('chatMessage', {
                 name: myPlayer.name,
                 message: message
             });
 
-            // Limpiar input
             chatInput.value = '';
         }
     });
 
-    // En los eventos de Socket.IO, agregar:
-    socket.on('chatMessage', (data) => {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = 'chat-message';
-        messageDiv.innerHTML = `<span class="player-name">${data.name}:</span> ${data.message}`;
-        chatMessages.appendChild(messageDiv);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-    });
-
-    // Modificar la función updatePlayerCount para incluir actualización del scoreboard
+    // Función para actualizar contador de jugadores
     function updatePlayerCount() {
         playerCountElement.textContent = players.size;
         updateScoreboard();
@@ -184,20 +131,7 @@ document.addEventListener('DOMContentLoaded', () => {
         gameContainer.style.display = 'block';
         
         // Conectar con Socket.IO
-        if (typeof io === 'undefined') {
-            console.error('Socket.IO no está cargado. Asegúrate de estar usando el puerto 3000');
-            alert('Error: Por favor, accede al juego a través de http://localhost:3000');
-            return;
-        }
-
-        try {
-            socket = io();
-            console.log('Conectando al servidor...');
-        } catch (error) {
-            console.error('Error al conectar con Socket.IO:', error);
-            alert('Error de conexión. Asegúrate de que el servidor esté corriendo.');
-            return;
-        }
+        socket = io();
 
         // Eventos de Socket.IO
         socket.on('connect', () => {
@@ -220,6 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const player = players.get(data.id);
                 player.x = data.x;
                 player.y = data.y;
+                player.score = data.score || 0;
             } else {
                 players.set(data.id, new Player(
                     data.x,
@@ -236,14 +171,23 @@ document.addEventListener('DOMContentLoaded', () => {
             updatePlayerCount();
         });
 
-        socket.on('connect_error', (error) => {
-            console.error('Error de conexión:', error);
-            alert('Error de conexión con el servidor.');
+        socket.on('chatMessage', (data) => {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'chat-message';
+            messageDiv.innerHTML = `<span class="player-name">${data.name}:</span> ${data.message}`;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
         });
 
         // Iniciar bucle del juego
         gameLoop();
     }
+
+    // Habilitar/deshabilitar botón de jugar según el nombre
+    nombreInput.addEventListener('input', () => {
+        botonJugar.disabled = nombreInput.value.trim().length < 2;
+    });
+    botonJugar.disabled = true;
 
     // Evento del botón jugar
     botonJugar.addEventListener('click', startGame);
@@ -258,81 +202,21 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.fillStyle = '#2a2a2a';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Generar power-ups cada 10 segundos
-        const currentTime = Date.now();
-        if (currentTime - lastPowerUpTime > 10000 && powerUps.length < 3) {
-            powerUps.push(new PowerUp());
-            lastPowerUpTime = currentTime;
-        }
-
-        // Dibujar power-ups
-        powerUps.forEach((powerUp, index) => {
-            powerUp.draw();
-            
-            // Verificar colisiones con jugadores
-            players.forEach(player => {
-                const dx = player.x - powerUp.x;
-                const dy = player.y - powerUp.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                
-                if (distance < player.size + powerUp.size) {
-                    // Aplicar efecto
-                    if (powerUp.type === 'speed') {
-                        player.speed = 12;
-                    } else {
-                        player.size = 45;
-                    }
-                    player.powerUp = powerUp.type;
-                    
-                    // Eliminar power-up
-                    powerUps.splice(index, 1);
-                    
-                    // Programar fin del power-up
-                    setTimeout(() => {
-                        player.speed = 7;
-                        player.size = 30;
-                        player.powerUp = null;
-                    }, 5000);
-                }
-            });
-        });
-
-        // Verificar colisiones entre jugadores
-        if (myId && players.has(myId)) {
-            const myPlayer = players.get(myId);
-            players.forEach((otherPlayer, id) => {
-                if (id !== myId && myPlayer.collidesWith(otherPlayer)) {
-                    // El jugador más grande gana
-                    if (myPlayer.size > otherPlayer.size) {
-                        myPlayer.score += 1;
-                        socket.emit('playerScored', {
-                            id: myId,
-                            score: myPlayer.score
-                        });
-                    }
-                }
-            });
-        }
-
-        // Actualizar mi jugador
         if (myId && players.has(myId)) {
             const myPlayer = players.get(myId);
             myPlayer.update(keys);
             
-            // Enviar posición al servidor
             if (socket && socket.connected) {
                 socket.emit('playerMove', {
                     x: myPlayer.x,
                     y: myPlayer.y,
-                    name: playerName
+                    name: playerName,
+                    score: myPlayer.score
                 });
             }
         }
 
-        // Dibujar todos los jugadores
         players.forEach(player => player.draw());
-
-        // Siguiente frame
         requestAnimationFrame(gameLoop);
     }
 
