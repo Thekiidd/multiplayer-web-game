@@ -71,6 +71,15 @@ io.on('connection', (socket) => {
             message: sanitizedMessage
         });
     });
+
+    // Manejar disparos del jugador
+    socket.on('playerShoot', (data) => {
+        socket.broadcast.emit('playerShoot', {
+            id: playerId,
+            x: data.x,
+            y: data.y
+        });
+    });
 });
 
 const PORT = process.env.PORT || 3000;
