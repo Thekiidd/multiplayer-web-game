@@ -95,11 +95,21 @@ body {
 
 .menu-boton:hover {
     background-color: #45a049;
+    transform: scale(1.05);
+    transition: transform 0.2s;
+}
+
+.menu-boton:active {
+    transform: scale(0.95);
 }
 
 .menu-boton:disabled {
     background-color: #666;
     cursor: not-allowed;
+}
+
+.menu-input:focus {
+    outline: 2px solid #4CAF50;
 }
 
 @media (max-width: 850px) {

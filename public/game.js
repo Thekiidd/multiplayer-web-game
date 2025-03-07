@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const chatMessages = document.getElementById('chatMessages');
     const chatInput = document.getElementById('chatInput');
     const scoreList = document.getElementById('scoreList');
+    const botonRegresar = document.getElementById('botonRegresar');
 
     // Variables globales
     let socket;
@@ -152,6 +153,12 @@ document.addEventListener('DOMContentLoaded', () => {
         mobileControls.style.display = 'block'; // Mostrar controles móviles
     });
 
+    // Evento para el botón de regresar
+    botonRegresar.addEventListener('click', () => {
+        menuInicial.style.display = 'none';
+        menuPlataforma.style.display = 'flex';
+    });
+
     // Clase Bala
     class Bullet {
         constructor(x, y, angle) {
@@ -203,9 +210,10 @@ document.addEventListener('DOMContentLoaded', () => {
             this.y += Math.sin(this.angle) * this.speed;
             this.distance += this.speed;
 
+            // Asegúrate de que las balas se mantengan dentro del mapa
             return this.distance < this.maxDistance &&
-                   this.x > 0 && this.x < canvas.width &&
-                   this.y > 0 && this.y < canvas.height;
+                   this.x > 0 && this.x < camera.mapWidth &&
+                   this.y > 0 && this.y < camera.mapHeight;
         }
     }
 
@@ -272,11 +280,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (now - this.lastShot > 250) {
                 const angle = Math.atan2(targetY - this.y, targetX - this.x);
                 
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.size + 10, 0, Math.PI * 2);
-                ctx.fillStyle = 'rgba(255, 255, 0, 0.3)';
-                ctx.fill();
-
                 this.bullets.push(new Bullet(this.x, this.y, angle));
                 this.lastShot = now;
                 playSound('shoot');
@@ -391,8 +394,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const player = players.get(myId);
             if (!player.isDead) {
                 const rect = canvas.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
+                const x = e.clientX - rect.left + camera.x;
+                const y = e.clientY - rect.top + camera.y;
                 player.shoot(x, y);
 
                 socket.emit('playerShoot', { x, y });
