@@ -526,16 +526,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const heart = new THREE.Mesh(geometry, material);
         scene.add(heart);
 
-        // Rotamos el corazón 180 grados para ponerlo en la posición correcta
+        // Ajustamos la posición y rotación del corazón
         heart.rotation.z = Math.PI;
-        heart.position.y = -10; // Ajustamos la posición vertical
+        heart.position.y = 0; // Cambiamos de -10 a 0 para centrarlo verticalmente
+        heart.position.x = 0; // Aseguramos que esté centrado horizontalmente
+        heart.scale.set(0.7, 0.7, 0.7); // Hacemos el corazón un poco más pequeño
 
-        // Luz
+        // Ajustamos la luz para mejor visualización
         const light = new THREE.DirectionalLight(0xffffff, 1);
         light.position.set(0, 0, 5);
         scene.add(light);
 
-        camera.position.z = 30;
+        // Agregamos luz ambiental para mejor iluminación
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+
+        camera.position.z = 25; // Ajustamos la distancia de la cámara
 
         let animationFrameId; // Para poder cancelar la animación
 
