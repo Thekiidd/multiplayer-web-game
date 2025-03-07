@@ -246,4 +246,79 @@ body {
     #chat {
         width: calc(100% - 20px);
     }
+}
+
+/* Controles móviles */
+#mobileControls {
+    display: none; /* Por defecto oculto, se muestra en móviles */
+    position: fixed;
+    bottom: 20px;
+    left: 0;
+    right: 0;
+    padding: 10px;
+    z-index: 1000;
+}
+
+#joystick {
+    position: fixed;
+    bottom: 30px;
+    left: 30px;
+}
+
+.joystick-base {
+    width: 120px;
+    height: 120px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    position: relative;
+}
+
+.joystick-stick {
+    width: 50px;
+    height: 50px;
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 50%;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+#shootButton {
+    position: fixed;
+    bottom: 50px;
+    right: 50px;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: rgba(255, 0, 0, 0.5);
+    border: none;
+    color: white;
+    font-size: 2em;
+    touch-action: none;
+}
+
+/* Media query para móviles */
+@media (max-width: 768px) {
+    #mobileControls {
+        display: block;
+    }
+
+    #gameUI {
+        left: 5px;
+        right: 5px;
+    }
+
+    #chat {
+        width: calc(100% - 10px);
+        max-height: 150px;
+    }
+
+    #scoreboard {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        left: auto;
+        width: auto;
+    }
 } 

@@ -22,6 +22,15 @@ document.addEventListener('DOMContentLoaded', () => {
     let myId = null;
     let playerName = '';
 
+    // Variables para el joystick
+    let joystickActive = false;
+    let joystickBase = document.querySelector('.joystick-base');
+    let joystickStick = document.querySelector('.joystick-stick');
+    let joystickData = { x: 0, y: 0 };
+    
+    // Detectar si es dispositivo móvil
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
     // Sistema de sonidos
     const sounds = {
         shoot: new Audio('https://assets.mixkit.co/active_storage/sfx/2771/2771-preview.mp3'),
@@ -210,11 +219,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            if (keys.ArrowLeft) this.x -= this.speed;
-            if (keys.ArrowRight) this.x += this.speed;
-            if (keys.ArrowUp) this.y -= this.speed;
-            if (keys.ArrowDown) this.y += this.speed;
+            if (isMobile) {
+                // Movimiento con joystick
+                this.x += joystickData.x * this.speed;
+                this.y += joystickData.y * this.speed;
+            } else {
+                // Movimiento con teclado (existente)
+                if (keys.ArrowLeft) this.x -= this.speed;
+                if (keys.ArrowRight) this.x += this.speed;
+                if (keys.ArrowUp) this.y -= this.speed;
+                if (keys.ArrowDown) this.y += this.speed;
+            }
 
+            // Mantener al jugador dentro de los límites
             this.x = Math.max(this.size, Math.min(canvas.width - this.size, this.x));
             this.y = Math.max(this.size, Math.min(canvas.height - this.size, this.y));
 
@@ -573,5 +590,69 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         mensajeAmor.style.display = 'none';
         menuInicial.style.display = 'flex';
+    });
+
+    // Función para manejar el joystick
+    function handleJoystick(e) {
+        const touch = e.touches[0];
+        const rect = joystickBase.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        
+        let deltaX = touch.clientX - centerX;
+        let deltaY = touch.clientY - centerY;
+        
+        // Limitar el movimiento del stick
+        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+        const maxDistance = rect.width / 2;
+        
+        if (distance > maxDistance) {
+            const angle = Math.atan2(deltaY, deltaX);
+            deltaX = Math.cos(angle) * maxDistance;
+            deltaY = Math.sin(angle) * maxDistance;
+        }
+        
+        // Actualizar posición del stick
+        joystickStick.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+        
+        // Normalizar valores para el movimiento
+        joystickData.x = deltaX / maxDistance;
+        joystickData.y = deltaY / maxDistance;
+    }
+
+    // Eventos táctiles para el joystick
+    joystickBase.addEventListener('touchstart', (e) => {
+        joystickActive = true;
+        handleJoystick(e);
+    });
+
+    document.addEventListener('touchmove', (e) => {
+        if (joystickActive) {
+            e.preventDefault();
+            handleJoystick(e);
+        }
+    });
+
+    document.addEventListener('touchend', () => {
+        joystickActive = false;
+        joystickStick.style.transform = 'translate(-50%, -50%)';
+        joystickData = { x: 0, y: 0 };
+    });
+
+    // Botón de disparo
+    const shootButton = document.getElementById('shootButton');
+    shootButton.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (myId && players.has(myId)) {
+            const player = players.get(myId);
+            if (!player.isDead) {
+                // Disparar en la dirección que mira el jugador
+                const angle = Math.atan2(joystickData.y, joystickData.x);
+                const distance = 100;
+                const targetX = player.x + Math.cos(angle) * distance;
+                const targetY = player.y + Math.sin(angle) * distance;
+                player.shoot(targetX, targetY);
+            }
+        }
     });
 }); 
