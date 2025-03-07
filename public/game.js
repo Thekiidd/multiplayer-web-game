@@ -487,6 +487,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Agregar Three.js para el corazón 3D
     function crearCorazon3D() {
+        // Primero limpiamos cualquier corazón existente
+        while (corazon3D.firstChild) {
+            corazon3D.removeChild(corazon3D.firstChild);
+        }
+
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -521,6 +526,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const heart = new THREE.Mesh(geometry, material);
         scene.add(heart);
 
+        // Rotamos el corazón 180 grados para ponerlo en la posición correcta
+        heart.rotation.z = Math.PI;
+        heart.position.y = -10; // Ajustamos la posición vertical
+
         // Luz
         const light = new THREE.DirectionalLight(0xffffff, 1);
         light.position.set(0, 0, 5);
@@ -528,12 +537,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
         camera.position.z = 30;
 
+        let animationFrameId; // Para poder cancelar la animación
+
         function animate() {
-            requestAnimationFrame(animate);
+            animationFrameId = requestAnimationFrame(animate);
             heart.rotation.y += 0.01;
             renderer.render(scene, camera);
         }
         animate();
+
+        // Guardamos la función para limpiar la animación
+        corazon3D.cleanup = () => {
+            cancelAnimationFrame(animationFrameId);
+            renderer.dispose();
+        };
     }
 
     // Eventos para los botones
@@ -544,6 +561,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     volverMenu.addEventListener('click', () => {
+        // Limpiamos la animación antes de ocultar
+        if (corazon3D.cleanup) {
+            corazon3D.cleanup();
+        }
         mensajeAmor.style.display = 'none';
         menuInicial.style.display = 'flex';
     });
