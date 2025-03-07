@@ -40,14 +40,34 @@ io.on('connection', (socket) => {
         io.emit('playerDisconnected', playerId);
     });
 
-    // Manejar movimiento del jugador
+    // Manejar muerte de jugador
+    socket.on('playerDied', (data) => {
+        io.emit('playerDied', {
+            id: data.id,
+            killerId: data.killerId
+        });
+    });
+
+    // Manejar respawn de jugador
+    socket.on('playerRespawn', (data) => {
+        io.emit('playerRespawn', {
+            id: data.id,
+            x: data.x,
+            y: data.y
+        });
+    });
+
+    // Actualizar el evento playerMove
     socket.on('playerMove', (data) => {
         // Guardar información del jugador
         players.set(playerId, {
             x: data.x,
             y: data.y,
             name: data.name,
-            score: data.score || 0
+            score: data.score,
+            health: data.health,
+            isDead: data.isDead,
+            bullets: data.bullets
         });
 
         // Transmitir el movimiento a todos los demás jugadores
@@ -56,7 +76,10 @@ io.on('connection', (socket) => {
             x: data.x,
             y: data.y,
             name: data.name,
-            score: data.score || 0
+            score: data.score,
+            health: data.health,
+            isDead: data.isDead,
+            bullets: data.bullets
         });
     });
 

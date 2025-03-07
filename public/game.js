@@ -58,6 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
             this.respawnTime = 0;      // Tiempo para reaparecer
             this.lastShot = 0;         // Control de cadencia de disparo
             this.health = 100;         // Salud del jugador
+            this.lastDamageFrom = null; // Guardar quién hizo el último daño
         }
 
         draw() {
@@ -106,8 +107,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        takeDamage(damage) {
+        takeDamage(damage, attackerId) {
             this.health -= damage;
+            this.lastDamageFrom = attackerId; // Guardar quién hizo el último daño
+            
             if (this.health <= 0 && !this.isDead) {
                 this.die();
             }
@@ -116,8 +119,16 @@ document.addEventListener('DOMContentLoaded', () => {
         die() {
             this.isDead = true;
             this.health = 0;
-            this.respawnTime = Date.now() + 3000; // Reaparece en 3 segundos
+            this.respawnTime = Date.now() + 3000;
             playSound('explosion');
+            
+            // Emitir evento de muerte al servidor
+            if (socket && socket.connected) {
+                socket.emit('playerDied', {
+                    id: myId,
+                    killerId: this.lastDamageFrom
+                });
+            }
         }
 
         respawn() {
@@ -126,7 +137,17 @@ document.addEventListener('DOMContentLoaded', () => {
             this.x = Math.random() * (canvas.width - 100) + 50;
             this.y = Math.random() * (canvas.height - 100) + 50;
             this.bullets = [];
+            this.lastDamageFrom = null;
             playSound('respawn');
+
+            // Emitir evento de respawn
+            if (socket && socket.connected) {
+                socket.emit('playerRespawn', {
+                    id: myId,
+                    x: this.x,
+                    y: this.y
+                });
+            }
         }
 
         update(keys) {
@@ -221,13 +242,15 @@ document.addEventListener('DOMContentLoaded', () => {
             players.forEach((otherPlayer, otherPlayerId) => {
                 if (playerId === otherPlayerId || otherPlayer.isDead) return;
 
-                otherPlayer.bullets.forEach(bullet => {
+                otherPlayer.bullets.forEach((bullet, bulletIndex) => {
                     const dx = player.x - bullet.x;
                     const dy = player.y - bullet.y;
                     const distance = Math.sqrt(dx * dx + dy * dy);
 
                     if (distance < player.size + bullet.size) {
-                        player.takeDamage(25); // Cada bala hace 25 de daño
+                        player.takeDamage(25, otherPlayerId);
+                        otherPlayer.bullets.splice(bulletIndex, 1); // Eliminar la bala
+
                         if (player.isDead) {
                             otherPlayer.score += 1;
                             updateScoreboard();
@@ -312,6 +335,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 player.x = data.x;
                 player.y = data.y;
                 player.score = data.score || 0;
+                player.health = data.health;
+                player.isDead = data.isDead;
+                
+                // Actualizar las balas
+                player.bullets = data.bullets.map(b => {
+                    const bullet = new Bullet(b.x, b.y, 0);
+                    bullet.x = b.x;
+                    bullet.y = b.y;
+                    return bullet;
+                });
             } else {
                 players.set(data.id, new Player(
                     data.x,
@@ -336,6 +369,12 @@ document.addEventListener('DOMContentLoaded', () => {
             chatMessages.scrollTop = chatMessages.scrollHeight;
         });
 
+        socket.on('playerDied', (data) => {
+            if (players.has(data.id)) {
+                const player = players.get(data.id);
+                player.isDead = true;
+                player.health = 0;
+                player.respawnTime = Date.now() + 3000;
         // Iniciar bucle del juego
         gameLoop();
     }
