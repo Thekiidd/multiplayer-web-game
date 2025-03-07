@@ -322,3 +322,47 @@ body {
         width: auto;
     }
 } 
+
+/* Estilos para los joysticks */
+.joystick {
+    position: fixed;
+    width: 120px;
+    height: 120px;
+}
+
+#moveJoystick {
+    bottom: 30px;
+    left: 30px;
+}
+
+#aimJoystick {
+    bottom: 30px;
+    right: 30px;
+}
+
+.joystick-base {
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    position: relative;
+}
+
+#moveJoystick .joystick-base {
+    border: 2px solid rgba(0, 255, 0, 0.5);
+}
+
+#aimJoystick .joystick-base {
+    border: 2px solid rgba(255, 0, 0, 0.5);
+}
+
+.joystick-stick {
+    width: 50px;
+    height: 50px;
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 50%;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+} 

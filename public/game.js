@@ -45,6 +45,101 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Agregar después de las variables globales existentes
+    const camera = {
+        x: 0,
+        y: 0,
+        width: window.innerWidth,
+        height: window.innerHeight,
+        mapWidth: 3000,  // Tamaño del mapa
+        mapHeight: 2000
+    };
+
+    // Sistema de joysticks para móviles
+    const moveJoystick = {
+        active: false,
+        base: document.querySelector('#moveJoystick .joystick-base'),
+        stick: document.querySelector('#moveJoystick .joystick-stick'),
+        data: { x: 0, y: 0 }
+    };
+
+    const aimJoystick = {
+        active: false,
+        base: document.querySelector('#aimJoystick .joystick-base'),
+        stick: document.querySelector('#aimJoystick .joystick-stick'),
+        data: { x: 0, y: 0 }
+    };
+
+    // Función para manejar los joysticks
+    function handleJoystick(joystick, e) {
+        const touch = e.touches[0];
+        const rect = joystick.base.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        
+        let deltaX = touch.clientX - centerX;
+        let deltaY = touch.clientY - centerY;
+        
+        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+        const maxDistance = rect.width / 2;
+        
+        if (distance > maxDistance) {
+            const angle = Math.atan2(deltaY, deltaX);
+            deltaX = Math.cos(angle) * maxDistance;
+            deltaY = Math.sin(angle) * maxDistance;
+        }
+        
+        joystick.stick.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+        joystick.data.x = deltaX / maxDistance;
+        joystick.data.y = deltaY / maxDistance;
+
+        // Disparo automático con el joystick de apuntado
+        if (joystick === aimJoystick && distance > maxDistance * 0.3) {
+            if (myId && players.has(myId)) {
+                const player = players.get(myId);
+                if (!player.isDead) {
+                    const angle = Math.atan2(deltaY, deltaX);
+                    const targetX = player.x + Math.cos(angle) * 100;
+                    const targetY = player.y + Math.sin(angle) * 100;
+                    player.shoot(targetX, targetY);
+                }
+            }
+        }
+    }
+
+    // Eventos para los joysticks
+    moveJoystick.base.addEventListener('touchstart', (e) => {
+        moveJoystick.active = true;
+        handleJoystick(moveJoystick, e);
+    });
+
+    aimJoystick.base.addEventListener('touchstart', (e) => {
+        aimJoystick.active = true;
+        handleJoystick(aimJoystick, e);
+    });
+
+    document.addEventListener('touchmove', (e) => {
+        if (moveJoystick.active) {
+            handleJoystick(moveJoystick, e);
+        }
+        if (aimJoystick.active) {
+            handleJoystick(aimJoystick, e);
+        }
+    });
+
+    document.addEventListener('touchend', (e) => {
+        if (moveJoystick.active) {
+            moveJoystick.active = false;
+            moveJoystick.stick.style.transform = 'translate(-50%, -50%)';
+            moveJoystick.data = { x: 0, y: 0 };
+        }
+        if (aimJoystick.active) {
+            aimJoystick.active = false;
+            aimJoystick.stick.style.transform = 'translate(-50%, -50%)';
+            aimJoystick.data = { x: 0, y: 0 };
+        }
+    });
+
     // Clase Bala
     class Bullet {
         constructor(x, y, angle) {
@@ -58,28 +153,30 @@ document.addEventListener('DOMContentLoaded', () => {
             this.trail = [];
         }
 
-        draw() {
+        draw(screenX, screenY) {
             ctx.beginPath();
             ctx.strokeStyle = 'rgba(255, 255, 0, 0.5)';
             ctx.lineWidth = 2;
             this.trail.forEach((pos, i) => {
                 const alpha = i / this.trail.length;
                 ctx.strokeStyle = `rgba(255, 255, 0, ${alpha})`;
+                const trailScreenX = pos.x - camera.x;
+                const trailScreenY = pos.y - camera.y;
                 if (i === 0) {
-                    ctx.moveTo(pos.x, pos.y);
+                    ctx.moveTo(trailScreenX, trailScreenY);
                 } else {
-                    ctx.lineTo(pos.x, pos.y);
+                    ctx.lineTo(trailScreenX, trailScreenY);
                 }
             });
             ctx.stroke();
 
             ctx.fillStyle = '#FFD700';
             ctx.beginPath();
-            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            ctx.arc(screenX, screenY, this.size, 0, Math.PI * 2);
             ctx.fill();
 
             ctx.beginPath();
-            ctx.arc(this.x, this.y, this.size + 2, 0, Math.PI * 2);
+            ctx.arc(screenX, screenY, this.size + 2, 0, Math.PI * 2);
             ctx.strokeStyle = 'rgba(255, 255, 0, 0.5)';
             ctx.stroke();
         }
@@ -119,10 +216,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         draw() {
+            const screenX = this.x - camera.x;
+            const screenY = this.y - camera.y;
+
             if (this.isDead) {
                 ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
                 ctx.beginPath();
-                ctx.arc(this.x, this.y, this.size * (1 + Math.sin(Date.now() / 100)), 0, Math.PI * 2);
+                ctx.arc(screenX, screenY, this.size * (1 + Math.sin(Date.now() / 100)), 0, Math.PI * 2);
                 ctx.fill();
                 return;
             }
@@ -130,25 +230,29 @@ document.addEventListener('DOMContentLoaded', () => {
             // Dibujar jugador
             ctx.fillStyle = this.color;
             ctx.beginPath();
-            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            ctx.arc(screenX, screenY, this.size, 0, Math.PI * 2);
             ctx.fill();
 
             // Barra de vida
             const healthBarWidth = 50;
             const healthBarHeight = 5;
             ctx.fillStyle = 'red';
-            ctx.fillRect(this.x - healthBarWidth/2, this.y - this.size - 15, healthBarWidth, healthBarHeight);
+            ctx.fillRect(screenX - healthBarWidth/2, screenY - this.size - 15, healthBarWidth, healthBarHeight);
             ctx.fillStyle = 'green';
-            ctx.fillRect(this.x - healthBarWidth/2, this.y - this.size - 15, healthBarWidth * (this.health/100), healthBarHeight);
+            ctx.fillRect(screenX - healthBarWidth/2, screenY - this.size - 15, healthBarWidth * (this.health/100), healthBarHeight);
 
             // Nombre y puntuación
             ctx.fillStyle = 'white';
             ctx.font = '16px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText(`${this.name} (${this.score})`, this.x, this.y - this.size - 20);
+            ctx.fillText(`${this.name} (${this.score})`, screenX, screenY - this.size - 20);
 
             // Dibujar balas
-            this.bullets.forEach(bullet => bullet.draw());
+            this.bullets.forEach(bullet => {
+                const bulletScreenX = bullet.x - camera.x;
+                const bulletScreenY = bullet.y - camera.y;
+                bullet.draw(bulletScreenX, bulletScreenY);
+            });
         }
 
         shoot(targetX, targetY) {
@@ -219,21 +323,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            if (isMobile) {
-                // Movimiento con joystick
-                this.x += joystickData.x * this.speed;
-                this.y += joystickData.y * this.speed;
+            // Movimiento con joystick en móviles
+            if (moveJoystick.active) {
+                this.x += moveJoystick.data.x * this.speed;
+                this.y += moveJoystick.data.y * this.speed;
             } else {
-                // Movimiento con teclado (existente)
+                // Movimiento con teclado en desktop
                 if (keys.ArrowLeft) this.x -= this.speed;
                 if (keys.ArrowRight) this.x += this.speed;
                 if (keys.ArrowUp) this.y -= this.speed;
                 if (keys.ArrowDown) this.y += this.speed;
             }
 
-            // Mantener al jugador dentro de los límites
-            this.x = Math.max(this.size, Math.min(canvas.width - this.size, this.x));
-            this.y = Math.max(this.size, Math.min(canvas.height - this.size, this.y));
+            // Limitar al jugador dentro del mapa
+            this.x = Math.max(this.size, Math.min(camera.mapWidth - this.size, this.x));
+            this.y = Math.max(this.size, Math.min(camera.mapHeight - this.size, this.y));
 
             this.bullets = this.bullets.filter(bullet => bullet.update());
         }
@@ -464,9 +568,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Game Loop
     function gameLoop() {
+        // Actualizar posición de la cámara
+        if (myId && players.has(myId)) {
+            const player = players.get(myId);
+            camera.x = player.x - canvas.width / 2;
+            camera.y = player.y - canvas.height / 2;
+
+            // Limitar la cámara a los bordes del mapa
+            camera.x = Math.max(0, Math.min(camera.x, camera.mapWidth - canvas.width));
+            camera.y = Math.max(0, Math.min(camera.y, camera.mapHeight - canvas.height));
+        }
+
+        // Limpiar canvas
         ctx.fillStyle = '#2a2a2a';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+        // Dibujar cuadrícula del mapa
+        drawMapGrid();
+
+        // Actualizar y dibujar jugadores
         if (myId && players.has(myId)) {
             const myPlayer = players.get(myId);
             myPlayer.update(keys);
@@ -487,6 +607,35 @@ document.addEventListener('DOMContentLoaded', () => {
         checkBulletCollisions();
         players.forEach(player => player.draw());
         requestAnimationFrame(gameLoop);
+    }
+
+    // Función para dibujar la cuadrícula del mapa
+    function drawMapGrid() {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.lineWidth = 1;
+        
+        const gridSize = 100;
+        const startX = -camera.x % gridSize;
+        const startY = -camera.y % gridSize;
+
+        for (let x = startX; x < canvas.width; x += gridSize) {
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, canvas.height);
+            ctx.stroke();
+        }
+
+        for (let y = startY; y < canvas.height; y += gridSize) {
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(canvas.width, y);
+            ctx.stroke();
+        }
+
+        // Dibujar bordes del mapa
+        ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+        ctx.lineWidth = 5;
+        ctx.strokeRect(-camera.x, -camera.y, camera.mapWidth, camera.mapHeight);
     }
 
     // Eventos del menú inicial
@@ -590,69 +739,5 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         mensajeAmor.style.display = 'none';
         menuInicial.style.display = 'flex';
-    });
-
-    // Función para manejar el joystick
-    function handleJoystick(e) {
-        const touch = e.touches[0];
-        const rect = joystickBase.getBoundingClientRect();
-        const centerX = rect.left + rect.width / 2;
-        const centerY = rect.top + rect.height / 2;
-        
-        let deltaX = touch.clientX - centerX;
-        let deltaY = touch.clientY - centerY;
-        
-        // Limitar el movimiento del stick
-        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-        const maxDistance = rect.width / 2;
-        
-        if (distance > maxDistance) {
-            const angle = Math.atan2(deltaY, deltaX);
-            deltaX = Math.cos(angle) * maxDistance;
-            deltaY = Math.sin(angle) * maxDistance;
-        }
-        
-        // Actualizar posición del stick
-        joystickStick.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
-        
-        // Normalizar valores para el movimiento
-        joystickData.x = deltaX / maxDistance;
-        joystickData.y = deltaY / maxDistance;
-    }
-
-    // Eventos táctiles para el joystick
-    joystickBase.addEventListener('touchstart', (e) => {
-        joystickActive = true;
-        handleJoystick(e);
-    });
-
-    document.addEventListener('touchmove', (e) => {
-        if (joystickActive) {
-            e.preventDefault();
-            handleJoystick(e);
-        }
-    });
-
-    document.addEventListener('touchend', () => {
-        joystickActive = false;
-        joystickStick.style.transform = 'translate(-50%, -50%)';
-        joystickData = { x: 0, y: 0 };
-    });
-
-    // Botón de disparo
-    const shootButton = document.getElementById('shootButton');
-    shootButton.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        if (myId && players.has(myId)) {
-            const player = players.get(myId);
-            if (!player.isDead) {
-                // Disparar en la dirección que mira el jugador
-                const angle = Math.atan2(joystickData.y, joystickData.x);
-                const distance = 100;
-                const targetX = player.x + Math.cos(angle) * distance;
-                const targetY = player.y + Math.sin(angle) * distance;
-                player.shoot(targetX, targetY);
-            }
-        }
     });
 }); 
