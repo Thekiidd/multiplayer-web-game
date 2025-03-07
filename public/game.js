@@ -38,20 +38,45 @@ document.addEventListener('DOMContentLoaded', () => {
             this.x = x;
             this.y = y;
             this.speed = 15;
-            this.size = 5;
+            this.size = 8;
             this.angle = angle;
             this.distance = 0;
             this.maxDistance = 800;
+            this.trail = [];
         }
 
         draw() {
-            ctx.fillStyle = 'yellow';
+            ctx.beginPath();
+            ctx.strokeStyle = 'rgba(255, 255, 0, 0.5)';
+            ctx.lineWidth = 2;
+            this.trail.forEach((pos, i) => {
+                const alpha = i / this.trail.length;
+                ctx.strokeStyle = `rgba(255, 255, 0, ${alpha})`;
+                if (i === 0) {
+                    ctx.moveTo(pos.x, pos.y);
+                } else {
+                    ctx.lineTo(pos.x, pos.y);
+                }
+            });
+            ctx.stroke();
+
+            ctx.fillStyle = '#FFD700';
             ctx.beginPath();
             ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
             ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size + 2, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(255, 255, 0, 0.5)';
+            ctx.stroke();
         }
 
         update() {
+            this.trail.push({x: this.x, y: this.y});
+            if (this.trail.length > 5) {
+                this.trail.shift();
+            }
+
             this.x += Math.cos(this.angle) * this.speed;
             this.y += Math.sin(this.angle) * this.speed;
             this.distance += this.speed;
@@ -117,9 +142,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const now = Date.now();
             if (now - this.lastShot > 250) {
                 const angle = Math.atan2(targetY - this.y, targetX - this.x);
+                
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size + 10, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255, 255, 0, 0.3)';
+                ctx.fill();
+
                 this.bullets.push(new Bullet(this.x, this.y, angle));
                 this.lastShot = now;
                 playSound('shoot');
+
+                this.x -= Math.cos(angle) * 5;
+                this.y -= Math.sin(angle) * 5;
             }
         }
 
@@ -229,6 +263,27 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Añadir indicador visual de disparo
+    canvas.addEventListener('mousemove', (e) => {
+        if (myId && players.has(myId)) {
+            const player = players.get(myId);
+            if (!player.isDead) {
+                const rect = canvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                
+                // Dibujar línea de mira
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath();
+                ctx.moveTo(player.x, player.y);
+                ctx.lineTo(mouseX, mouseY);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+        }
+    });
+
     // Funciones de actualización
     function updatePlayerCount() {
         playerCountElement.textContent = players.size;
@@ -262,6 +317,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     const distance = Math.sqrt(dx * dx + dy * dy);
 
                     if (distance < player.size + bullet.size) {
+                        ctx.beginPath();
+                        ctx.arc(bullet.x, bullet.y, 20, 0, Math.PI * 2);
+                        ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+                        ctx.fill();
+
                         player.takeDamage(25, otherPlayerId);
                         otherPlayer.bullets.splice(bulletIndex, 1);
 
