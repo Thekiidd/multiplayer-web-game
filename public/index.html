@@ -20,14 +20,13 @@
         </div>
     </div>
 
-    <!-- Contenedor del Juego (inicialmente oculto) -->
+    <!-- Contenedor del Juego -->
     <div class="game-container" style="display: none;">
         <canvas id="gameCanvas"></canvas>
         <div id="gameStatus">
-            Jugadores conectados: <span id="playerCount">0</span>
+            Jugadores: <span id="playerCount">0</span>
         </div>
-
-        <!-- Nuevo: Chat y Scoreboard -->
+        <!-- Chat y Scoreboard -->
         <div id="gameUI">
             <div id="scoreboard">
                 <h3>🏆 Top Jugadores</h3>
@@ -35,7 +34,7 @@
             </div>
             <div id="chat">
                 <div id="chatMessages"></div>
-                <input type="text" id="chatInput" placeholder="Presiona Enter para chatear..." maxlength="100">
+                <input type="text" id="chatInput" placeholder="Presiona Enter para chatear...">
             </div>
         </div>
     </div>

@@ -1,12 +1,7 @@
 const express = require('express');
 const app = express();
 const http = require('http').createServer(app);
-const io = require('socket.io')(http, {
-    cors: {
-        origin: process.env.NODE_ENV === 'production' ? false : ["http://localhost:3000", "http://127.0.0.1:3000"],
-        methods: ["GET", "POST"]
-    }
-});
+const io = require('socket.io')(http);
 const path = require('path');
 
 // Configuración de seguridad básica
@@ -51,7 +46,8 @@ io.on('connection', (socket) => {
         players.set(playerId, {
             x: data.x,
             y: data.y,
-            name: data.name
+            name: data.name,
+            score: data.score || 0
         });
 
         // Transmitir el movimiento a todos los demás jugadores
@@ -59,25 +55,13 @@ io.on('connection', (socket) => {
             id: playerId,
             x: data.x,
             y: data.y,
-            name: data.name
+            name: data.name,
+            score: data.score || 0
         });
-    });
-
-    // Manejar puntuación
-    socket.on('playerScored', (data) => {
-        if (players.has(data.id)) {
-            const player = players.get(data.id);
-            player.score = data.score;
-            socket.broadcast.emit('scoreUpdate', {
-                id: data.id,
-                score: data.score
-            });
-        }
     });
 
     // Manejar mensajes de chat
     socket.on('chatMessage', (data) => {
-        // Evitar inyección HTML básica
         const sanitizedMessage = data.message
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;');
