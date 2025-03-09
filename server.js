@@ -4,6 +4,10 @@ const http = require('http').createServer(app);
 const io = require('socket.io')(http);
 const path = require('path');
 
+// Aumentar el límite de memoria de Node.js
+const v8 = require('v8');
+v8.setFlagsFromString('--max-old-space-size=4096');
+
 // Configuración de seguridad básica
 app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -15,15 +19,30 @@ app.use((req, res, next) => {
 // Servir archivos estáticos
 app.use(express.static('public'));
 
-// Almacenar información de los jugadores
+// Almacenar información de los jugadores con límite de balas
 const players = new Map();
+const MAX_BULLETS_PER_PLAYER = 20;
 
 // Constantes del juego
 const GAME_CONSTANTS = {
     MAP_WIDTH: 3000,
     MAP_HEIGHT: 2000,
     UPDATE_RATE: 1000 / 60, // 60 FPS
+    CLEANUP_INTERVAL: 1000 * 60, // Limpieza cada minuto
 };
+
+// Función para limpiar datos antiguos
+function cleanupOldData() {
+    players.forEach((player, id) => {
+        // Limitar el número de balas por jugador
+        if (player.bullets && player.bullets.length > MAX_BULLETS_PER_PLAYER) {
+            player.bullets = player.bullets.slice(-MAX_BULLETS_PER_PLAYER);
+        }
+    });
+}
+
+// Ejecutar limpieza periódicamente
+setInterval(cleanupOldData, GAME_CONSTANTS.CLEANUP_INTERVAL);
 
 // Ruta principal
 app.get('/', (req, res) => {
@@ -42,7 +61,13 @@ io.on('connection', (socket) => {
         id: playerId,
         players: Array.from(players.entries()).map(([id, data]) => ({
             id,
-            ...data
+            x: data.x,
+            y: data.y,
+            name: data.name,
+            score: data.score,
+            health: data.health,
+            isDead: data.isDead,
+            avatarUrl: data.avatarUrl
         }))
     });
 
@@ -59,6 +84,7 @@ io.on('connection', (socket) => {
             const player = players.get(data.id);
             player.isDead = true;
             player.health = 0;
+            player.bullets = []; // Limpiar balas al morir
         }
         io.emit('playerDied', {
             id: data.id,
@@ -74,12 +100,9 @@ io.on('connection', (socket) => {
             player.health = 100;
             player.x = data.x;
             player.y = data.y;
+            player.bullets = [];
         }
-        io.emit('playerRespawn', {
-            id: data.id,
-            x: data.x,
-            y: data.y
-        });
+        io.emit('playerRespawn', data);
     });
 
     // Actualizar el evento playerMove con manejo de avatar
@@ -88,29 +111,29 @@ io.on('connection', (socket) => {
         const x = Math.max(0, Math.min(data.x, GAME_CONSTANTS.MAP_WIDTH));
         const y = Math.max(0, Math.min(data.y, GAME_CONSTANTS.MAP_HEIGHT));
 
-        // Guardar información del jugador
+        // Guardar solo los datos necesarios
         players.set(playerId, {
             x,
             y,
             name: data.name,
-            score: data.score,
+            score: data.score || 0,
             health: data.health,
             isDead: data.isDead,
-            bullets: data.bullets,
-            avatarUrl: data.avatarUrl // Guardar URL del avatar
+            bullets: (data.bullets || []).slice(-MAX_BULLETS_PER_PLAYER),
+            avatarUrl: data.avatarUrl
         });
 
-        // Transmitir el movimiento a todos los demás jugadores
+        // Enviar solo los datos necesarios
         socket.broadcast.emit('playerMoved', {
             id: playerId,
             x,
             y,
             name: data.name,
-            score: data.score,
+            score: data.score || 0,
             health: data.health,
             isDead: data.isDead,
-            bullets: data.bullets,
-            avatarUrl: data.avatarUrl // Incluir URL del avatar en la transmisión
+            bullets: (data.bullets || []).slice(-MAX_BULLETS_PER_PLAYER),
+            avatarUrl: data.avatarUrl
         });
     });
 
@@ -139,6 +162,15 @@ io.on('connection', (socket) => {
             }
         }
     });
+});
+
+// Manejo de errores
+process.on('uncaughtException', (err) => {
+    console.error('Error no capturado:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Promesa rechazada no manejada:', reason);
 });
 
 // Iniciar servidor
