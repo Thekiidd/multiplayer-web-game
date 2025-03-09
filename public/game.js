@@ -11,12 +11,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const ctx = canvas.getContext('2d');
     const scoreList = document.getElementById('scoreList');
 
-   // Variables globales
-   let socket;
-   const players = new Map();
-   let myId = null;
-   let playerName = '';
-   let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent); // Detectar móvil
+    // Variables globales
+    let socket;
+    const players = new Map();
+    let myId = null;
+    let playerName = '';
+    let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    let lastEmitTime = 0; // Añadido para evitar error en gameLoop
 
     // Mostrar controles móviles si es un dispositivo móvil
     if (isMobile) {
@@ -37,13 +38,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Agregar después de las variables globales existentes
     const camera = {
         x: 0,
         y: 0,
         width: window.innerWidth,
         height: window.innerHeight,
-        mapWidth: 3000,  // Tamaño del mapa
+        mapWidth: 3000,
         mapHeight: 2000
     };
 
@@ -62,8 +62,8 @@ document.addEventListener('DOMContentLoaded', () => {
         data: { x: 0, y: 0 }
     };
 
-     // Función para manejar los joysticks
-     function handleJoystick(joystick, e) {
+    // Función para manejar los joysticks
+    function handleJoystick(joystick, e) {
         const touch = e.touches[0];
         const rect = joystick.base.getBoundingClientRect();
         const centerX = rect.left + rect.width / 2;
@@ -85,7 +85,6 @@ document.addEventListener('DOMContentLoaded', () => {
         joystick.data.x = deltaX / maxDistance;
         joystick.data.y = deltaY / maxDistance;
 
-        // Disparo automático con el joystick de apuntado
         if (joystick === aimJoystick && distance > maxDistance * 0.3) {
             if (myId && players.has(myId)) {
                 const player = players.get(myId);
@@ -120,7 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        document.addEventListener('touchend', (e) => {
+        document.addEventListener('touchend', () => {
             if (moveJoystick.active) {
                 moveJoystick.active = false;
                 moveJoystick.stick.style.transform = 'translate(-50%, -50%)';
@@ -133,26 +132,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-
-    // Eventos para la selección de plataforma
-    botonWeb.addEventListener('click', () => {
-        isMobile = false;
-        menuPlataforma.style.display = 'none';
-        menuInicial.style.display = 'flex';
-    });
-
-    botonMovil.addEventListener('click', () => {
-        isMobile = true;
-        menuPlataforma.style.display = 'none';
-        menuInicial.style.display = 'flex';
-        mobileControls.style.display = 'block'; // Mostrar controles móviles
-    });
-
-    // Evento para el botón de regresar
-    botonRegresar.addEventListener('click', () => {
-        menuInicial.style.display = 'none';
-        menuPlataforma.style.display = 'flex';
-    });
 
     // Constantes del juego
     const GAME_CONSTANTS = {
@@ -254,7 +233,6 @@ document.addEventListener('DOMContentLoaded', () => {
             this.y += Math.sin(this.angle) * this.speed;
             this.distance += this.speed;
 
-            // Asegúrate de que las balas se mantengan dentro del mapa
             return this.distance < this.maxDistance &&
                    this.x > 0 && this.x < camera.mapWidth &&
                    this.y > 0 && this.y < camera.mapHeight;
@@ -285,7 +263,6 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.lineWidth = 2;
             ctx.stroke();
 
-            // Dibujar el nombre del poder
             ctx.fillStyle = 'white';
             ctx.font = '12px Arial';
             ctx.textAlign = 'center';
@@ -303,10 +280,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Lista de power-ups activos
     const activePowerUps = [];
-
-    // Función para generar power-ups
     function spawnPowerUp() {
         const types = Object.values(POWERS);
         const randomType = types[Math.floor(Math.random() * types.length)];
@@ -315,8 +289,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         activePowerUps.push(new PowerUp(x, y, randomType));
     }
-
-    // Iniciar generación de power-ups
     setInterval(spawnPowerUp, GAME_CONSTANTS.POWER_SPAWN_INTERVAL);
 
     // Clase Jugador
@@ -357,9 +329,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // Dibujar jugador
             if (this.avatarLoaded && this.avatar) {
-                // Dibujar la imagen del avatar
                 ctx.save();
                 ctx.beginPath();
                 ctx.arc(screenX, screenY, this.size, 0, Math.PI * 2);
@@ -368,14 +338,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.drawImage(this.avatar, screenX - this.size, screenY - this.size, this.size * 2, this.size * 2);
                 ctx.restore();
             } else {
-                // Dibujar círculo de color por defecto
                 ctx.fillStyle = this.color;
                 ctx.beginPath();
                 ctx.arc(screenX, screenY, this.size, 0, Math.PI * 2);
                 ctx.fill();
             }
 
-            // Barra de vida
             const healthBarWidth = 50;
             const healthBarHeight = 5;
             ctx.fillStyle = 'red';
@@ -383,20 +351,17 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.fillStyle = 'green';
             ctx.fillRect(screenX - healthBarWidth/2, screenY - this.size - 15, healthBarWidth * (this.health/100), healthBarHeight);
 
-            // Nombre y puntuación
             ctx.fillStyle = 'white';
             ctx.font = '16px Arial';
             ctx.textAlign = 'center';
             ctx.fillText(`${this.name} (${this.score})`, screenX, screenY - this.size - 20);
 
-            // Dibujar balas
             this.bullets.forEach(bullet => {
                 const bulletScreenX = bullet.x - camera.x;
                 const bulletScreenY = bullet.y - camera.y;
                 bullet.draw(bulletScreenX, bulletScreenY);
             });
 
-            // Dibujar efectos de poderes activos
             if (this.hasShield) {
                 ctx.beginPath();
                 ctx.arc(screenX, screenY, this.size + 5, 0, Math.PI * 2);
@@ -428,11 +393,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const now = Date.now();
             if (now - this.lastShot > 250) {
                 const angle = Math.atan2(targetY - this.y, targetX - this.x);
-                
                 this.bullets.push(new Bullet(this.x, this.y, angle));
                 this.lastShot = now;
                 playSound('shoot');
-
                 this.x -= Math.cos(angle) * 5;
                 this.y -= Math.sin(angle) * 5;
             }
@@ -440,34 +403,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
         takeDamage(damage, attackerId) {
             if (this.isDead) return;
-
-            // Reducir el daño si tiene escudo
-            if (this.hasShield) {
-                damage *= 0.5;
-            }
-
+            if (this.hasShield) damage *= 0.5;
             this.health = Math.max(0, this.health - damage);
             this.lastDamageFrom = attackerId;
-            
-            if (this.health <= 0) {
-                this.die();
-            }
+            if (this.health <= 0) this.die();
         }
 
         die() {
-            if (this.isDead) return; // Evitar muerte múltiple
-            
+            if (this.isDead) return;
             this.isDead = true;
             this.health = 0;
             this.respawnTime = Date.now() + 3000;
-            this.bullets = []; // Limpiar balas al morir
+            this.bullets = [];
             playSound('explosion');
-            
             if (socket && socket.connected && myId === this.id) {
-                socket.emit('playerDied', {
-                    id: myId,
-                    killerId: this.lastDamageFrom
-                });
+                socket.emit('playerDied', { id: myId, killerId: this.lastDamageFrom });
             }
         }
 
@@ -479,40 +429,30 @@ document.addEventListener('DOMContentLoaded', () => {
             this.bullets = [];
             this.lastDamageFrom = null;
             playSound('respawn');
-
             if (socket && socket.connected) {
-                socket.emit('playerRespawn', {
-                    id: myId,
-                    x: this.x,
-                    y: this.y
-                });
+                socket.emit('playerRespawn', { id: myId, x: this.x, y: this.y });
             }
         }
 
         update(keys) {
             if (this.isDead) {
-                if (Date.now() > this.respawnTime) {
-                    this.respawn();
-                }
+                if (Date.now() > this.respawnTime) this.respawn();
                 return;
             }
 
             let dx = 0;
             let dy = 0;
 
-            // Movimiento con joystick en móviles
             if (moveJoystick.active) {
                 dx = moveJoystick.data.x * this.speed;
                 dy = moveJoystick.data.y * this.speed;
             } else {
-                // Movimiento con teclado (WASD y flechas)
                 if (keys.ArrowLeft || keys.a) dx -= this.speed;
                 if (keys.ArrowRight || keys.d) dx += this.speed;
                 if (keys.ArrowUp || keys.w) dy -= this.speed;
                 if (keys.ArrowDown || keys.s) dy += this.speed;
             }
 
-            // Normalizar el movimiento diagonal
             if (dx !== 0 && dy !== 0) {
                 const factor = 1 / Math.sqrt(2);
                 dx *= factor;
@@ -522,7 +462,6 @@ document.addEventListener('DOMContentLoaded', () => {
             this.x += dx;
             this.y += dy;
 
-            // Limitar al jugador dentro del mapa
             this.x = Math.max(this.size, Math.min(camera.mapWidth - this.size, this.x));
             this.y = Math.max(this.size, Math.min(camera.mapHeight - this.size, this.y));
 
@@ -530,8 +469,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         setAvatar(imageUrl) {
-            if (imageUrl === this.avatarUrl) return; // Evitar recargar la misma imagen
-            
+            if (imageUrl === this.avatarUrl) return;
             this.avatarUrl = imageUrl;
             const img = new Image();
             img.onload = () => {
@@ -547,48 +485,30 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         applyPower(powerType) {
-            // Remover el poder anterior si existe
-            if (this.activePowers.has(powerType)) {
-                clearTimeout(this.activePowers.get(powerType));
-            }
-
-            // Aplicar el nuevo poder
+            if (this.activePowers.has(powerType)) clearTimeout(this.activePowers.get(powerType));
             powerType.apply(this);
-
-            // Programar la eliminación del poder
             const timeoutId = setTimeout(() => {
                 powerType.remove(this);
                 this.activePowers.delete(powerType);
             }, GAME_CONSTANTS.POWER_DURATION);
-
             this.activePowers.set(powerType, timeoutId);
         }
     }
 
-    // Configuración del canvas
     function ajustarCanvas() {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
     }
-
     ajustarCanvas();
     window.addEventListener('resize', ajustarCanvas);
 
-    // Control de teclas mejorado
     const keys = {
-        ArrowLeft: false,
-        ArrowRight: false,
-        ArrowUp: false,
-        ArrowDown: false,
-        a: false,
-        d: false,
-        w: false,
-        s: false
+        ArrowLeft: false, ArrowRight: false, ArrowUp: false, ArrowDown: false,
+        a: false, d: false, w: false, s: false
     };
 
     window.addEventListener('keydown', (e) => {
         const key = e.key.toLowerCase();
-        // Solo prevenir el comportamiento por defecto si no estamos en un input
         if (keys.hasOwnProperty(key) && document.activeElement.tagName !== 'INPUT') {
             keys[key] = true;
             e.preventDefault();
@@ -597,17 +517,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.addEventListener('keyup', (e) => {
         const key = e.key.toLowerCase();
-        if (keys.hasOwnProperty(key)) {
-            keys[key] = false;
-        }
+        if (keys.hasOwnProperty(key)) keys[key] = false;
     });
 
-    // Variables globales adicionales para el disparo automático
     let isMouseDown = false;
     let lastAutoShot = 0;
-    const AUTO_SHOT_DELAY = 250; // Tiempo entre disparos automáticos (en milisegundos)
+    const AUTO_SHOT_DELAY = 250;
 
-    // Manejo de disparos
     canvas.addEventListener('mousedown', (e) => {
         isMouseDown = true;
         handleShot(e);
@@ -618,18 +534,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     canvas.addEventListener('mousemove', (e) => {
-        if (isMouseDown) {
-            handleShot(e);
-        }
-
-        // Dibujar línea de mira
+        if (isMouseDown) handleShot(e);
         if (myId && players.has(myId)) {
             const player = players.get(myId);
             if (!player.isDead) {
                 const rect = canvas.getBoundingClientRect();
                 const mouseX = e.clientX - rect.left;
                 const mouseY = e.clientY - rect.top;
-                
                 ctx.setLineDash([5, 5]);
                 ctx.beginPath();
                 ctx.moveTo(player.x - camera.x, player.y - camera.y);
@@ -645,20 +556,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (myId && players.has(myId)) {
             const player = players.get(myId);
             const now = Date.now();
-            
             if (!player.isDead && now - lastAutoShot >= AUTO_SHOT_DELAY) {
                 const rect = canvas.getBoundingClientRect();
                 const x = e.clientX - rect.left + camera.x;
                 const y = e.clientY - rect.top + camera.y;
                 player.shoot(x, y);
-
                 socket.emit('playerShoot', { x, y });
                 lastAutoShot = now;
             }
         }
     }
 
-    // Funciones de actualización
     function updatePlayerCount() {
         playerCountElement.textContent = players.size;
         updateScoreboard();
@@ -668,67 +576,40 @@ document.addEventListener('DOMContentLoaded', () => {
         const scores = Array.from(players.values())
             .sort((a, b) => b.score - a.score)
             .slice(0, 10);
-
         scoreList.innerHTML = scores
-            .map((player, index) => `
-                <div class="score-item">
-                    ${index + 1}. ${player.name}: ${player.score}
-                </div>
-            `)
+            .map((player, index) => `<div class="score-item">${index + 1}. ${player.name}: ${player.score}</div>`)
             .join('');
     }
 
     function checkBulletCollisions() {
         players.forEach((player, playerId) => {
             if (player.isDead) return;
-
             players.forEach((otherPlayer, otherPlayerId) => {
                 if (playerId === otherPlayerId || otherPlayer.isDead) return;
-
                 const bulletsToRemove = [];
                 otherPlayer.bullets.forEach((bullet, bulletIndex) => {
                     const dx = player.x - bullet.x;
                     const dy = player.y - bullet.y;
                     const distance = Math.sqrt(dx * dx + dy * dy);
-
                     if (distance < player.size + bullet.size) {
                         bulletsToRemove.push(bulletIndex);
-
-                        // Efecto visual de impacto mejorado
                         ctx.beginPath();
                         ctx.arc(bullet.x - camera.x, bullet.y - camera.y, 25, 0, Math.PI * 2);
                         ctx.fillStyle = 'rgba(255, 0, 0, 0.4)';
                         ctx.fill();
-
-                        // Calcular daño con multiplicador
                         let finalDamage = GAME_CONSTANTS.BULLET_DAMAGE;
-                        if (otherPlayer.damageMultiplier > 1) {
-                            finalDamage *= otherPlayer.damageMultiplier;
-                        }
-
-                        // Aplicar daño al jugador impactado
+                        if (otherPlayer.damageMultiplier > 1) finalDamage *= otherPlayer.damageMultiplier;
                         player.takeDamage(finalDamage, otherPlayerId);
-
-                        // Notificar el impacto al servidor
                         if (socket && socket.connected && otherPlayerId === myId) {
-                            socket.emit('bulletHit', {
-                                targetId: playerId,
-                                damage: finalDamage,
-                                shooterId: myId
-                            });
+                            socket.emit('bulletHit', { targetId: playerId, damage: finalDamage, shooterId: myId });
                         }
                     }
                 });
-
-                // Eliminar las balas que impactaron
-                bulletsToRemove.reverse().forEach(index => {
-                    otherPlayer.bullets.splice(index, 1);
-                });
+                bulletsToRemove.reverse().forEach(index => otherPlayer.bullets.splice(index, 1));
             });
         });
     }
 
-    // Iniciar juego
     function startGame() {
         playerName = nombreInput.value.trim();
         const avatarUrl = document.getElementById('avatarPreview').src;
@@ -736,28 +617,18 @@ document.addEventListener('DOMContentLoaded', () => {
         menuInicial.style.display = 'none';
         gameContainer.style.display = 'block';
         
-        if (socket) {
-            socket.disconnect();
-        }
+        if (socket) socket.disconnect();
         
         const isProduction = window.location.hostname !== 'localhost';
-        const serverUrl = isProduction 
-            ? 'https://multiplayer-web-game-063s.onrender.com'
-            : 'http://localhost:3000';
-            
+        const serverUrl = isProduction ? 'https://multiplayer-web-game-063s.onrender.com' : 'http://localhost:3000';
+        
         socket = io(serverUrl, {
             transports: ['websocket'],
             upgrade: false,
-            cors: {
-                origin: "https://multiplayer-web-game.vercel.app",
-                methods: ["GET", "POST"]
-            }
+            cors: { origin: "https://multiplayer-web-game.vercel.app", methods: ["GET", "POST"] }
         });
 
-        socket.on('connect', () => {
-            console.log('¡Conectado al servidor!');
-        });
-
+        socket.on('connect', () => console.log('¡Conectado al servidor!'));
         socket.on('serverFull', () => {
             alert('El servidor está lleno. Por favor, intenta más tarde.');
             menuInicial.style.display = 'flex';
@@ -767,8 +638,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         socket.on('init', (data) => {
             myId = data.id;
-            
-            // Crear nuestro jugador
             const newPlayer = new Player(
                 Math.random() * (camera.mapWidth - 200) + 100,
                 Math.random() * (camera.mapHeight - 200) + 100,
@@ -778,19 +647,11 @@ document.addEventListener('DOMContentLoaded', () => {
             newPlayer.setAvatar(avatarUrl);
             players.set(myId, newPlayer);
 
-            // Inicializar jugadores existentes
             if (data.players) {
                 data.players.forEach(playerData => {
                     if (playerData.id !== myId) {
-                        const player = new Player(
-                            playerData.x,
-                            playerData.y,
-                            `hsl(${Math.random() * 360}, 70%, 50%)`,
-                            playerData.name
-                        );
-                        if (playerData.avatarUrl) {
-                            player.setAvatar(playerData.avatarUrl);
-                        }
+                        const player = new Player(playerData.x, playerData.y, `hsl(${Math.random() * 360}, 70%, 50%)`, playerData.name);
+                        if (playerData.avatarUrl) player.setAvatar(playerData.avatarUrl);
                         player.score = playerData.score || 0;
                         player.health = playerData.health;
                         player.isDead = playerData.isDead;
@@ -798,34 +659,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
             }
-            
             updatePlayerCount();
         });
 
         socket.on('playerMoved', (data) => {
             if (players.has(data.id)) {
                 const player = players.get(data.id);
-                
-                // Interpolar posición
                 interpolatePosition(player, data);
-                
-                // Actualizar otros datos
                 player.score = data.score || 0;
                 player.health = data.health;
                 player.isDead = data.isDead;
-                
-                // Actualizar poderes
                 if (data.powers) {
                     player.hasShield = data.powers.hasShield;
                     player.damageMultiplier = data.powers.damageMultiplier;
                     player.speed = data.powers.speed;
                 }
-                
-                if (data.avatarUrl && !player.avatarLoaded) {
-                    player.setAvatar(data.avatarUrl);
-                }
-                
-                // Actualizar balas con ángulo correcto
+                if (data.avatarUrl && !player.avatarLoaded) player.setAvatar(data.avatarUrl);
                 player.bullets = data.bullets.map(b => {
                     const bullet = new Bullet(b.x, b.y, b.angle || 0);
                     bullet.x = b.x;
@@ -833,15 +682,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     return bullet;
                 });
             } else {
-                const newPlayer = new Player(
-                    data.x,
-                    data.y,
-                    `hsl(${Math.random() * 360}, 70%, 50%)`,
-                    data.name || 'Jugador'
-                );
-                if (data.avatarUrl) {
-                    newPlayer.setAvatar(data.avatarUrl);
-                }
+                const newPlayer = new Player(data.x, data.y, `hsl(${Math.random() * 360}, 70%, 50%)`, data.name || 'Jugador');
+                if (data.avatarUrl) newPlayer.setAvatar(data.avatarUrl);
                 players.set(data.id, newPlayer);
                 updatePlayerCount();
             }
@@ -853,9 +695,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 player.isDead = true;
                 player.health = 0;
                 player.respawnTime = Date.now() + 3000;
-                player.bullets = []; // Limpiar balas del jugador muerto
-                
-                // Solo actualizar el score si somos el asesino
+                player.bullets = [];
                 if (data.killerId && data.killerId === myId) {
                     const myPlayer = players.get(myId);
                     if (myPlayer && !myPlayer.isDead) {
@@ -885,7 +725,6 @@ document.addEventListener('DOMContentLoaded', () => {
         gameLoop();
     }
 
-    // Modificar la emisión de datos del jugador para mejor sincronización
     function emitPlayerData(player) {
         if (socket && socket.connected) {
             const now = Date.now();
@@ -897,28 +736,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 score: player.score,
                 health: player.health,
                 isDead: player.isDead,
-                bullets: player.bullets.map(b => ({
-                    x: Math.round(b.x),
-                    y: Math.round(b.y),
-                    angle: b.angle
-                })).slice(-5),
-                powers: {
-                    hasShield: player.hasShield,
-                    damageMultiplier: player.damageMultiplier,
-                    speed: player.speed
-                }
+                bullets: player.bullets.map(b => ({ x: Math.round(b.x), y: Math.round(b.y), angle: b.angle })).slice(-5),
+                powers: { hasShield: player.hasShield, damageMultiplier: player.damageMultiplier, speed: player.speed }
             };
-            
             if (player.avatarUrl !== player._lastSentAvatarUrl) {
                 minimalData.avatarUrl = player.avatarUrl;
                 player._lastSentAvatarUrl = player.avatarUrl;
             }
-
             socket.emit('playerMove', minimalData);
         }
     }
 
-    // Agregar interpolación de movimiento
     function interpolatePosition(player, newData) {
         const timestamp = Date.now();
         player.targetX = newData.x;
@@ -929,14 +757,11 @@ document.addEventListener('DOMContentLoaded', () => {
         player.interpolationEnd = timestamp + GAME_CONSTANTS.INTERPOLATION_DELAY;
     }
 
-    // Modificar el gameLoop para incluir interpolación
     function updatePlayerPositions() {
         const now = Date.now();
         players.forEach(player => {
             if (player.interpolationStart && player.interpolationEnd) {
-                const progress = (now - player.interpolationStart) / 
-                               (player.interpolationEnd - player.interpolationStart);
-                
+                const progress = (now - player.interpolationStart) / (player.interpolationEnd - player.interpolationStart);
                 if (progress <= 1) {
                     player.x = player.startX + (player.targetX - player.startX) * progress;
                     player.y = player.startY + (player.targetY - player.startY) * progress;
@@ -945,25 +770,18 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Actualizar el gameLoop
     function gameLoop() {
         if (myId && players.has(myId)) {
             const myPlayer = players.get(myId);
             myPlayer.update(keys);
             
-            // Verificar colisiones con power-ups
             activePowerUps.forEach((powerUp, index) => {
                 if (!powerUp.collected && powerUp.checkCollision(myPlayer)) {
                     powerUp.collected = true;
                     myPlayer.applyPower(powerUp.type);
                     activePowerUps.splice(index, 1);
-                    
-                    // Notificar al servidor sobre el power-up recogido
                     if (socket && socket.connected) {
-                        socket.emit('powerUpCollected', {
-                            id: myId,
-                            powerType: powerUp.type.name
-                        });
+                        socket.emit('powerUpCollected', { id: myId, powerType: powerUp.type.name });
                     }
                 }
             });
@@ -974,17 +792,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 lastEmitTime = now;
             }
             
-            // Actualizar cámara
             camera.x = myPlayer.x - canvas.width / 2;
             camera.y = myPlayer.y - canvas.height / 2;
             camera.x = Math.max(0, Math.min(camera.x, camera.mapWidth - canvas.width));
             camera.y = Math.max(0, Math.min(camera.y, camera.mapHeight - canvas.height));
         }
 
-        // Actualizar posiciones interpoladas
         updatePlayerPositions();
 
-        // Renderizar
         ctx.fillStyle = '#2a2a2a';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         drawMapGrid();
@@ -995,11 +810,9 @@ document.addEventListener('DOMContentLoaded', () => {
         requestAnimationFrame(gameLoop);
     }
 
-    // Función para dibujar la cuadrícula del mapa
     function drawMapGrid() {
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
         ctx.lineWidth = 1;
-        
         const gridSize = 100;
         const startX = -camera.x % gridSize;
         const startY = -camera.y % gridSize;
@@ -1018,7 +831,6 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.stroke();
         }
 
-        // Dibujar bordes del mapa
         ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
         ctx.lineWidth = 5;
         ctx.strokeRect(-camera.x, -camera.y, camera.mapWidth, camera.mapHeight);
@@ -1032,9 +844,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     botonJugar.addEventListener('click', startGame);
     nombreInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter' && !botonJugar.disabled) {
-            startGame();
-        }
+        if (e.key === 'Enter' && !botonJugar.disabled) startGame();
     });
 
     document.getElementById('playerAvatar').addEventListener('change', function(e) {
@@ -1047,28 +857,4 @@ document.addEventListener('DOMContentLoaded', () => {
             reader.readAsDataURL(file);
         }
     });
-
-    // Manejo de la previsualización del avatar
-    document.getElementById('playerAvatar').addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                document.getElementById('avatarPreview').src = e.target.result;
-                // Guardar la imagen para usarla en el juego
-                playerAvatar = e.target.result;
-            };
-            reader.readAsDataURL(file);
-        }
-    });
-
-    // Modificar la creación del jugador para usar el avatar personalizado
-    function createPlayer(name) {
-        const player = {
-            name: name,
-            avatar: playerAvatar || 'default-avatar.png',
-            // ... resto de las propiedades del jugador ...
-        };
-        return player;
-    }
-}); 
+});
