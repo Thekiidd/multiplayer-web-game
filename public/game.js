@@ -563,6 +563,11 @@ document.addEventListener('DOMContentLoaded', () => {
         menuInicial.style.display = 'none';
         gameContainer.style.display = 'block';
         
+        // Desconectar socket existente si hay uno
+        if (socket) {
+            socket.disconnect();
+        }
+        
         socket = io();
 
         socket.on('connect', () => {
@@ -760,31 +765,6 @@ document.addEventListener('DOMContentLoaded', () => {
     nombreInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter' && !botonJugar.disabled) {
             startGame();
-        }
-    });
-
-    document.addEventListener('keydown', (event) => {
-        switch(event.key.toLowerCase()) {
-            case 'w':
-            case 'arrowup':
-                // Mover arriba
-                player.moveUp();
-                break;
-            case 's':
-            case 'arrowdown':
-                // Mover abajo
-                player.moveDown();
-                break;
-            case 'a':
-            case 'arrowleft':
-                // Mover izquierda
-                player.moveLeft();
-                break;
-            case 'd':
-            case 'arrowright':
-                // Mover derecha
-                player.moveRight();
-                break;
         }
     });
 
