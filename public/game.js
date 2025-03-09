@@ -233,6 +233,8 @@ document.addEventListener('DOMContentLoaded', () => {
             this.lastShot = 0;
             this.health = 100;
             this.lastDamageFrom = null;
+            this.avatar = null;
+            this.avatarLoaded = false;
         }
 
         draw() {
@@ -248,10 +250,22 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Dibujar jugador
-            ctx.fillStyle = this.color;
-            ctx.beginPath();
-            ctx.arc(screenX, screenY, this.size, 0, Math.PI * 2);
-            ctx.fill();
+            if (this.avatarLoaded && this.avatar) {
+                // Dibujar la imagen del avatar
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(screenX, screenY, this.size, 0, Math.PI * 2);
+                ctx.closePath();
+                ctx.clip();
+                ctx.drawImage(this.avatar, screenX - this.size, screenY - this.size, this.size * 2, this.size * 2);
+                ctx.restore();
+            } else {
+                // Dibujar círculo de color por defecto
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(screenX, screenY, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
 
             // Barra de vida
             const healthBarWidth = 50;
@@ -344,10 +358,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.y += moveJoystick.data.y * this.speed;
             } else {
                 // Movimiento con teclado en desktop
-                if (keys.ArrowLeft) this.x -= this.speed;
-                if (keys.ArrowRight) this.x += this.speed;
-                if (keys.ArrowUp) this.y -= this.speed;
-                if (keys.ArrowDown) this.y += this.speed;
+                if (keys.ArrowLeft || keys.a) this.x -= this.speed;
+                if (keys.ArrowRight || keys.d) this.x += this.speed;
+                if (keys.ArrowUp || keys.w) this.y -= this.speed;
+                if (keys.ArrowDown || keys.s) this.y += this.speed;
             }
 
             // Limitar al jugador dentro del mapa
@@ -355,6 +369,15 @@ document.addEventListener('DOMContentLoaded', () => {
             this.y = Math.max(this.size, Math.min(camera.mapHeight - this.size, this.y));
 
             this.bullets = this.bullets.filter(bullet => bullet.update());
+        }
+
+        setAvatar(imageUrl) {
+            const img = new Image();
+            img.onload = () => {
+                this.avatar = img;
+                this.avatarLoaded = true;
+            };
+            img.src = imageUrl;
         }
     }
 
@@ -372,19 +395,23 @@ document.addEventListener('DOMContentLoaded', () => {
         ArrowLeft: false,
         ArrowRight: false,
         ArrowUp: false,
-        ArrowDown: false
+        ArrowDown: false,
+        a: false,
+        d: false,
+        w: false,
+        s: false
     };
 
     window.addEventListener('keydown', (e) => {
-        if (keys.hasOwnProperty(e.key)) {
-            keys[e.key] = true;
+        if (keys.hasOwnProperty(e.key.toLowerCase())) {
+            keys[e.key.toLowerCase()] = true;
             e.preventDefault();
         }
     });
 
     window.addEventListener('keyup', (e) => {
-        if (keys.hasOwnProperty(e.key)) {
-            keys[e.key] = false;
+        if (keys.hasOwnProperty(e.key.toLowerCase())) {
+            keys[e.key.toLowerCase()] = false;
         }
     });
 
@@ -493,6 +520,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Iniciar juego
     function startGame() {
         playerName = nombreInput.value.trim();
+        const avatarUrl = document.getElementById('avatarPreview').src;
+        
         menuInicial.style.display = 'none';
         gameContainer.style.display = 'block';
         
@@ -504,12 +533,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         socket.on('init', (data) => {
             myId = data.id;
-            players.set(myId, new Player(
+            const newPlayer = new Player(
                 Math.random() * (canvas.width - 100) + 50,
                 Math.random() * (canvas.height - 100) + 50,
                 `hsl(${Math.random() * 360}, 70%, 50%)`,
                 playerName
-            ));
+            );
+            newPlayer.setAvatar(avatarUrl);
+            players.set(myId, newPlayer);
             updatePlayerCount();
         });
 
@@ -522,6 +553,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 player.health = data.health;
                 player.isDead = data.isDead;
                 
+                if (data.avatarUrl && !player.avatarLoaded) {
+                    player.setAvatar(data.avatarUrl);
+                }
+                
                 player.bullets = data.bullets.map(b => {
                     const bullet = new Bullet(b.x, b.y, 0);
                     bullet.x = b.x;
@@ -529,12 +564,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     return bullet;
                 });
             } else {
-                players.set(data.id, new Player(
+                const newPlayer = new Player(
                     data.x,
                     data.y,
                     `hsl(${Math.random() * 360}, 70%, 50%)`,
                     data.name || 'Jugador'
-                ));
+                );
+                if (data.avatarUrl) {
+                    newPlayer.setAvatar(data.avatarUrl);
+                }
+                players.set(data.id, newPlayer);
                 updatePlayerCount();
             }
         });
@@ -614,7 +653,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     score: myPlayer.score,
                     health: myPlayer.health,
                     isDead: myPlayer.isDead,
-                    bullets: myPlayer.bullets.map(b => ({x: b.x, y: b.y}))
+                    bullets: myPlayer.bullets.map(b => ({x: b.x, y: b.y})),
+                    avatarUrl: document.getElementById('avatarPreview').src
                 });
             }
         }
