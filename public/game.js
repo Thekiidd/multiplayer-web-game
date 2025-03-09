@@ -344,10 +344,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 this.y += moveJoystick.data.y * this.speed;
             } else {
                 // Movimiento con teclado en desktop
-            if (keys.ArrowLeft) this.x -= this.speed;
-            if (keys.ArrowRight) this.x += this.speed;
-            if (keys.ArrowUp) this.y -= this.speed;
-            if (keys.ArrowDown) this.y += this.speed;
+                if (keys.ArrowLeft) this.x -= this.speed;
+                if (keys.ArrowRight) this.x += this.speed;
+                if (keys.ArrowUp) this.y -= this.speed;
+                if (keys.ArrowDown) this.y += this.speed;
             }
 
             // Limitar al jugador dentro del mapa
@@ -665,4 +665,53 @@ document.addEventListener('DOMContentLoaded', () => {
             startGame();
         }
     });
+
+    document.addEventListener('keydown', (event) => {
+        switch(event.key.toLowerCase()) {
+            case 'w':
+            case 'arrowup':
+                // Mover arriba
+                player.moveUp();
+                break;
+            case 's':
+            case 'arrowdown':
+                // Mover abajo
+                player.moveDown();
+                break;
+            case 'a':
+            case 'arrowleft':
+                // Mover izquierda
+                player.moveLeft();
+                break;
+            case 'd':
+            case 'arrowright':
+                // Mover derecha
+                player.moveRight();
+                break;
+        }
+    });
+
+    // Manejo de la previsualización del avatar
+    document.getElementById('playerAvatar').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('avatarPreview').src = e.target.result;
+                // Guardar la imagen para usarla en el juego
+                playerAvatar = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    // Modificar la creación del jugador para usar el avatar personalizado
+    function createPlayer(name) {
+        const player = {
+            name: name,
+            avatar: playerAvatar || 'default-avatar.png',
+            // ... resto de las propiedades del jugador ...
+        };
+        return player;
+    }
 }); 

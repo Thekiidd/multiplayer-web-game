@@ -25,6 +25,11 @@
         <div class="menu-contenido">
             <h1>¡Bienvenido al Juego!</h1>
             <input type="text" id="nombreJugador" class="menu-input" placeholder="Ingresa tu nombre" maxlength="15">
+            <div class="avatar-selector">
+                <label for="playerAvatar">Selecciona tu avatar:</label>
+                <input type="file" id="playerAvatar" accept="image/*">
+                <img id="avatarPreview" src="default-avatar.png" alt="Avatar preview" style="width: 100px; height: 100px; object-fit: cover;">
+            </div>
             <button id="botonJugar" class="menu-boton">¡Jugar!</button>
             <button id="botonRegresar" class="menu-boton">Regresar</button>
         </div>
