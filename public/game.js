@@ -627,7 +627,7 @@ document.addEventListener('DOMContentLoaded', () => {
             upgrade: false,
             cors: { origin: "https://multiplayer-web-game.vercel.app", methods: ["GET", "POST"] }
         });
-
+    
         socket.on('connect', () => console.log('¡Conectado al servidor!'));
         socket.on('serverFull', () => {
             alert('El servidor está lleno. Por favor, intenta más tarde.');
@@ -635,7 +635,7 @@ document.addEventListener('DOMContentLoaded', () => {
             gameContainer.style.display = 'none';
             socket.disconnect();
         });
-
+    
         socket.on('init', (data) => {
             myId = data.id;
             const newPlayer = new Player(
@@ -646,7 +646,7 @@ document.addEventListener('DOMContentLoaded', () => {
             );
             newPlayer.setAvatar(avatarUrl);
             players.set(myId, newPlayer);
-
+    
             if (data.players) {
                 data.players.forEach(playerData => {
                     if (playerData.id !== myId) {
@@ -661,12 +661,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             updatePlayerCount();
         });
-
+    
         socket.on('playerMoved', (data) => {
             if (players.has(data.id)) {
                 const player = players.get(data.id);
                 interpolatePosition(player, data);
-                player.score = data.score || 0;
+                player.score = data.score || 0; // Actualizar puntaje desde el servidor
                 player.health = data.health;
                 player.isDead = data.isDead;
                 if (data.powers) {
@@ -684,11 +684,12 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 const newPlayer = new Player(data.x, data.y, `hsl(${Math.random() * 360}, 70%, 50%)`, data.name || 'Jugador');
                 if (data.avatarUrl) newPlayer.setAvatar(data.avatarUrl);
+                newPlayer.score = data.score || 0;
                 players.set(data.id, newPlayer);
                 updatePlayerCount();
             }
         });
-
+    
         socket.on('playerDied', (data) => {
             if (players.has(data.id)) {
                 const player = players.get(data.id);
@@ -696,16 +697,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 player.health = 0;
                 player.respawnTime = Date.now() + 3000;
                 player.bullets = [];
-                if (data.killerId && data.killerId === myId) {
-                    const myPlayer = players.get(myId);
-                    if (myPlayer && !myPlayer.isDead) {
-                        myPlayer.score += 1;
-                        updateScoreboard();
-                    }
+                
+                // Actualizar el puntaje del asesino desde el servidor
+                if (data.killerId && players.has(data.killerId)) {
+                    const killer = players.get(data.killerId);
+                    killer.score = data.killerScore; // Usar el puntaje enviado por el servidor
+                    updateScoreboard(); // Actualizar el scoreboard inmediatamente
                 }
             }
         });
-
+    
         socket.on('playerRespawn', (data) => {
             if (players.has(data.id)) {
                 const player = players.get(data.id);
@@ -716,12 +717,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 player.bullets = [];
             }
         });
-
+    
         socket.on('playerDisconnected', (id) => {
             players.delete(id);
             updatePlayerCount();
         });
-
+    
         gameLoop();
     }
 

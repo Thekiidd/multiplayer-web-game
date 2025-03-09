@@ -6,10 +6,10 @@ const path = require('path');
 
 // Configuración para memoria limitada
 const MEMORY_LIMITS = {
-    MAX_PLAYERS: 50,            // Máximo número de jugadores simultáneos
-    MAX_BULLETS: 10,            // Máximo número de balas por jugador
-    CLEANUP_INTERVAL: 10000,    // Limpieza cada 10 segundos
-    INACTIVE_TIMEOUT: 60000     // Desconectar jugadores inactivos después de 1 minuto
+    MAX_PLAYERS: 50,
+    MAX_BULLETS: 10,
+    CLEANUP_INTERVAL: 10000,
+    INACTIVE_TIMEOUT: 60000
 };
 
 // Configuración de seguridad básica
@@ -23,22 +23,17 @@ app.use((req, res, next) => {
 // Servir archivos estáticos
 app.use(express.static('public'));
 
-// Estructura de datos optimizada para jugadores
 const players = new Map();
 const playerLastActivity = new Map();
 
-// Constantes del juego
 const GAME_CONSTANTS = {
     MAP_WIDTH: 3000,
     MAP_HEIGHT: 2000,
-    UPDATE_RATE: 1000 / 30  // Reducido a 30 FPS para ahorrar recursos
+    UPDATE_RATE: 1000 / 30
 };
 
-// Función para limpiar datos y jugadores inactivos
 function cleanupData() {
     const now = Date.now();
-    
-    // Limpiar jugadores inactivos
     playerLastActivity.forEach((lastActivity, playerId) => {
         if (now - lastActivity > MEMORY_LIMITS.INACTIVE_TIMEOUT) {
             players.delete(playerId);
@@ -46,8 +41,6 @@ function cleanupData() {
             io.emit('playerDisconnected', playerId);
         }
     });
-
-    // Limpiar balas excesivas
     players.forEach(player => {
         if (player.bullets && player.bullets.length > MEMORY_LIMITS.MAX_BULLETS) {
             player.bullets = player.bullets.slice(-MEMORY_LIMITS.MAX_BULLETS);
@@ -55,10 +48,8 @@ function cleanupData() {
     });
 }
 
-// Ejecutar limpieza periódicamente
 setInterval(cleanupData, MEMORY_LIMITS.CLEANUP_INTERVAL);
 
-// Función para crear objeto de jugador optimizado
 function createPlayerData(data, x, y) {
     return {
         x: x,
@@ -72,7 +63,6 @@ function createPlayerData(data, x, y) {
     };
 }
 
-// Función para crear objeto de actualización optimizado
 function createUpdateData(player, id) {
     return {
         id: id,
@@ -87,14 +77,11 @@ function createUpdateData(player, id) {
     };
 }
 
-// Ruta principal
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public/index.html'));
 });
 
-// Manejo de conexiones de Socket.IO
 io.on('connection', (socket) => {
-    // Verificar límite de jugadores
     if (players.size >= MEMORY_LIMITS.MAX_PLAYERS) {
         socket.emit('serverFull');
         socket.disconnect(true);
@@ -104,7 +91,6 @@ io.on('connection', (socket) => {
     const playerId = socket.id;
     playerLastActivity.set(playerId, Date.now());
 
-    // Enviar solo datos necesarios al inicializar
     socket.emit('init', {
         id: playerId,
         players: Array.from(players.entries()).map(([id, data]) => createUpdateData(data, id))
@@ -131,6 +117,7 @@ io.on('connection', (socket) => {
             player.health = data.health;
             player.isDead = data.isDead;
             player.bullets = (data.bullets || []).slice(-MEMORY_LIMITS.MAX_BULLETS);
+            player.score = data.score || player.score; // Mantener el puntaje actualizado
         }
 
         socket.broadcast.emit('playerMoved', createUpdateData(players.get(playerId), playerId));
@@ -141,11 +128,7 @@ io.on('connection', (socket) => {
         
         const player = players.get(playerId);
         if (player && !player.isDead) {
-            socket.broadcast.emit('playerShoot', {
-                id: playerId,
-                x: data.x,
-                y: data.y
-            });
+            socket.broadcast.emit('playerShoot', { id: playerId, x: data.x, y: data.y });
         }
     });
 
@@ -157,7 +140,19 @@ io.on('connection', (socket) => {
             player.isDead = true;
             player.health = 0;
             player.bullets = [];
-            io.emit('playerDied', { id: data.id, killerId: data.killerId });
+
+            // Incrementar el puntaje del asesino si existe
+            if (data.killerId && players.has(data.killerId)) {
+                const killer = players.get(data.killerId);
+                killer.score = (killer.score || 0) + 1; // Incrementar puntaje
+            }
+
+            // Emitir evento con información actualizada
+            io.emit('playerDied', {
+                id: data.id,
+                killerId: data.killerId,
+                killerScore: data.killerId && players.has(data.killerId) ? players.get(data.killerId).score : null
+            });
         }
     });
 
@@ -176,7 +171,6 @@ io.on('connection', (socket) => {
     });
 });
 
-// Manejo de errores
 process.on('uncaughtException', (err) => {
     console.error('Error no capturado:', err);
 });
@@ -185,13 +179,11 @@ process.on('unhandledRejection', (reason, promise) => {
     console.error('Promesa rechazada no manejada:', reason);
 });
 
-// Limpieza de memoria periódica
 setInterval(() => {
     global.gc && global.gc();
 }, 30000);
 
-// Iniciar servidor
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, '0.0.0.0', () => {
     console.log(`Servidor corriendo en puerto ${PORT}`);
-}); 
+});
