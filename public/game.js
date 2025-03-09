@@ -569,6 +569,13 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('¡Conectado al servidor!');
         });
 
+        socket.on('serverFull', () => {
+            alert('El servidor está lleno. Por favor, intenta más tarde.');
+            menuInicial.style.display = 'flex';
+            gameContainer.style.display = 'none';
+            socket.disconnect();
+        });
+
         socket.on('init', (data) => {
             myId = data.id;
             
