@@ -163,9 +163,45 @@ document.addEventListener('DOMContentLoaded', () => {
     const GAME_CONSTANTS = {
         PLAYER_SPEED: 5,
         PLAYER_SIZE: 30,
-        BULLET_SPEED: 15,
+        BULLET_SPEED: 20,
         BULLET_SIZE: 8,
-        PLAYER_MAX_HEALTH: 100
+        PLAYER_MAX_HEALTH: 100,
+        POWER_DURATION: 10000, // 10 segundos
+        POWER_SPAWN_INTERVAL: 15000 // 15 segundos
+    };
+
+    // Sistema de poderes
+    const POWERS = {
+        SPEED: {
+            name: 'Velocidad',
+            color: '#00ff00',
+            apply: (player) => {
+                player.speed = GAME_CONSTANTS.PLAYER_SPEED * 1.5;
+            },
+            remove: (player) => {
+                player.speed = GAME_CONSTANTS.PLAYER_SPEED;
+            }
+        },
+        SHIELD: {
+            name: 'Escudo',
+            color: '#0000ff',
+            apply: (player) => {
+                player.hasShield = true;
+            },
+            remove: (player) => {
+                player.hasShield = false;
+            }
+        },
+        DAMAGE: {
+            name: 'Daño x2',
+            color: '#ff0000',
+            apply: (player) => {
+                player.damageMultiplier = 2;
+            },
+            remove: (player) => {
+                player.damageMultiplier = 1;
+            }
+        }
     };
 
     // Clase Bala
@@ -173,12 +209,13 @@ document.addEventListener('DOMContentLoaded', () => {
         constructor(x, y, angle) {
             this.x = x;
             this.y = y;
-            this.speed = 15;
+            this.speed = 20;
             this.size = 8;
             this.angle = angle;
             this.distance = 0;
-            this.maxDistance = 800;
+            this.maxDistance = 1500;
             this.trail = [];
+            this.damage = 25;
         }
 
         draw(screenX, screenY) {
@@ -226,6 +263,64 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Clase Power Up
+    class PowerUp {
+        constructor(x, y, type) {
+            this.x = x;
+            this.y = y;
+            this.type = type;
+            this.size = 20;
+            this.collected = false;
+        }
+
+        draw() {
+            if (this.collected) return;
+            
+            const screenX = this.x - camera.x;
+            const screenY = this.y - camera.y;
+
+            ctx.beginPath();
+            ctx.arc(screenX, screenY, this.size, 0, Math.PI * 2);
+            ctx.fillStyle = this.type.color;
+            ctx.fill();
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Dibujar el nombre del poder
+            ctx.fillStyle = 'white';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(this.type.name, screenX, screenY - this.size - 5);
+        }
+
+        checkCollision(player) {
+            if (this.collected) return false;
+            
+            const dx = player.x - this.x;
+            const dy = player.y - this.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            return distance < player.size + this.size;
+        }
+    }
+
+    // Lista de power-ups activos
+    const activePowerUps = [];
+
+    // Función para generar power-ups
+    function spawnPowerUp() {
+        const types = Object.values(POWERS);
+        const randomType = types[Math.floor(Math.random() * types.length)];
+        const x = Math.random() * (camera.mapWidth - 100) + 50;
+        const y = Math.random() * (camera.mapHeight - 100) + 50;
+        
+        activePowerUps.push(new PowerUp(x, y, randomType));
+    }
+
+    // Iniciar generación de power-ups
+    setInterval(spawnPowerUp, GAME_CONSTANTS.POWER_SPAWN_INTERVAL);
+
     // Clase Jugador
     class Player {
         constructor(x, y, color, name) {
@@ -246,6 +341,10 @@ document.addEventListener('DOMContentLoaded', () => {
             this.avatarLoaded = false;
             this.avatarUrl = null;
             this._lastSentAvatarUrl = null;
+            this.activePowers = new Map();
+            this.hasShield = false;
+            this.damageMultiplier = 1;
+            this.baseSpeed = GAME_CONSTANTS.PLAYER_SPEED;
         }
 
         draw() {
@@ -298,6 +397,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 const bulletScreenY = bullet.y - camera.y;
                 bullet.draw(bulletScreenX, bulletScreenY);
             });
+
+            // Dibujar efectos de poderes activos
+            if (this.hasShield) {
+                ctx.beginPath();
+                ctx.arc(screenX, screenY, this.size + 5, 0, Math.PI * 2);
+                ctx.strokeStyle = POWERS.SHIELD.color;
+                ctx.lineWidth = 3;
+                ctx.stroke();
+            }
+
+            if (this.damageMultiplier > 1) {
+                ctx.beginPath();
+                ctx.arc(screenX, screenY, this.size + 2, 0, Math.PI * 2);
+                ctx.strokeStyle = POWERS.DAMAGE.color;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+
+            if (this.speed > this.baseSpeed) {
+                ctx.beginPath();
+                ctx.arc(screenX, screenY, this.size + 8, 0, Math.PI * 2);
+                ctx.strokeStyle = POWERS.SPEED.color;
+                ctx.setLineDash([5, 5]);
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
         }
 
         shoot(targetX, targetY) {
@@ -315,8 +441,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         takeDamage(damage, attackerId) {
-            if (this.isDead) return; // No aplicar daño si ya está muerto
-            
+            if (this.isDead) return;
+
+            // Reducir el daño si tiene escudo
+            if (this.hasShield) {
+                damage *= 0.5;
+            }
+
             this.health = Math.max(0, this.health - damage);
             this.lastDamageFrom = attackerId;
             
@@ -416,6 +547,24 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             img.src = imageUrl;
         }
+
+        applyPower(powerType) {
+            // Remover el poder anterior si existe
+            if (this.activePowers.has(powerType)) {
+                clearTimeout(this.activePowers.get(powerType));
+            }
+
+            // Aplicar el nuevo poder
+            powerType.apply(this);
+
+            // Programar la eliminación del poder
+            const timeoutId = setTimeout(() => {
+                powerType.remove(this);
+                this.activePowers.delete(powerType);
+            }, GAME_CONSTANTS.POWER_DURATION);
+
+            this.activePowers.set(powerType, timeoutId);
+        }
     }
 
     // Configuración del canvas
@@ -441,7 +590,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.addEventListener('keydown', (e) => {
         const key = e.key.toLowerCase();
-        if (keys.hasOwnProperty(key)) {
+        // Solo prevenir el comportamiento por defecto si no estamos en un input
+        if (keys.hasOwnProperty(key) && document.activeElement.tagName !== 'INPUT') {
             keys[key] = true;
             e.preventDefault();
         }
@@ -756,6 +906,23 @@ document.addEventListener('DOMContentLoaded', () => {
             const myPlayer = players.get(myId);
             myPlayer.update(keys);
             
+            // Verificar colisiones con power-ups
+            activePowerUps.forEach((powerUp, index) => {
+                if (!powerUp.collected && powerUp.checkCollision(myPlayer)) {
+                    powerUp.collected = true;
+                    myPlayer.applyPower(powerUp.type);
+                    activePowerUps.splice(index, 1);
+                    
+                    // Notificar al servidor sobre el power-up recogido
+                    if (socket && socket.connected) {
+                        socket.emit('powerUpCollected', {
+                            id: myId,
+                            powerType: powerUp.type.name
+                        });
+                    }
+                }
+            });
+            
             // Limitar la frecuencia de emisión
             const now = Date.now();
             if (now - lastEmitTime >= EMIT_INTERVAL) {
@@ -776,6 +943,9 @@ document.addEventListener('DOMContentLoaded', () => {
         drawMapGrid();
         checkBulletCollisions();
         players.forEach(player => player.draw());
+        
+        // Dibujar power-ups
+        activePowerUps.forEach(powerUp => powerUp.draw());
         
         requestAnimationFrame(gameLoop);
     }
