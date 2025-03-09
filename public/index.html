@@ -6,6 +6,7 @@
     <title>Juego Multijugador</title>
     <link rel="stylesheet" href="styles.css">
     <!-- Script de Socket.IO -->
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <!-- Script del juego -->
     <script src="game.js" defer></script>
@@ -28,7 +29,7 @@
             <div class="avatar-selector">
                 <label for="playerAvatar">Selecciona tu avatar:</label>
                 <input type="file" id="playerAvatar" accept="image/*">
-                <img id="avatarPreview" src="default-avatar.png" alt="Avatar preview" style="width: 100px; height: 100px; object-fit: cover;">
+                <img id="avatarPreview" src="https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y" alt="Avatar preview" style="width: 100px; height: 100px; object-fit: cover;">
             </div>
             <button id="botonJugar" class="menu-boton">¡Jugar!</button>
             <button id="botonRegresar" class="menu-boton">Regresar</button>

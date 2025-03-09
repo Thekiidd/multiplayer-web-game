@@ -569,7 +569,16 @@ document.addEventListener('DOMContentLoaded', () => {
             socket.disconnect();
         }
         
-        socket = io();
+        // Determinar la URL del servidor
+        const isProduction = window.location.hostname !== 'localhost';
+        const serverUrl = isProduction 
+            ? 'https://multiplayer-web-game-063s.onrender.com' // URL de tu servidor en Render
+            : 'http://localhost:3000';
+            
+        socket = io(serverUrl, {
+            transports: ['websocket'],
+            upgrade: false
+        });
 
         socket.on('connect', () => {
             console.log('¡Conectado al servidor!');
