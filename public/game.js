@@ -159,6 +159,15 @@ document.addEventListener('DOMContentLoaded', () => {
         menuPlataforma.style.display = 'flex';
     });
 
+    // Constantes del juego
+    const GAME_CONSTANTS = {
+        PLAYER_SPEED: 5,
+        PLAYER_SIZE: 30,
+        BULLET_SPEED: 15,
+        BULLET_SIZE: 8,
+        PLAYER_MAX_HEALTH: 100
+    };
+
     // Clase Bala
     class Bullet {
         constructor(x, y, angle) {
@@ -224,17 +233,18 @@ document.addEventListener('DOMContentLoaded', () => {
             this.y = y;
             this.color = color;
             this.name = name;
-            this.size = 30;
-            this.speed = 7;
+            this.size = GAME_CONSTANTS.PLAYER_SIZE;
+            this.speed = GAME_CONSTANTS.PLAYER_SPEED;
             this.score = 0;
             this.bullets = [];
             this.isDead = false;
             this.respawnTime = 0;
             this.lastShot = 0;
-            this.health = 100;
+            this.health = GAME_CONSTANTS.PLAYER_MAX_HEALTH;
             this.lastDamageFrom = null;
             this.avatar = null;
             this.avatarLoaded = false;
+            this.avatarUrl = null;
         }
 
         draw() {
@@ -352,17 +362,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
+            let dx = 0;
+            let dy = 0;
+
             // Movimiento con joystick en móviles
             if (moveJoystick.active) {
-                this.x += moveJoystick.data.x * this.speed;
-                this.y += moveJoystick.data.y * this.speed;
+                dx = moveJoystick.data.x * this.speed;
+                dy = moveJoystick.data.y * this.speed;
             } else {
-                // Movimiento con teclado en desktop
-                if (keys.ArrowLeft || keys.a) this.x -= this.speed;
-                if (keys.ArrowRight || keys.d) this.x += this.speed;
-                if (keys.ArrowUp || keys.w) this.y -= this.speed;
-                if (keys.ArrowDown || keys.s) this.y += this.speed;
+                // Movimiento con teclado (WASD y flechas)
+                if (keys.ArrowLeft || keys.a) dx -= this.speed;
+                if (keys.ArrowRight || keys.d) dx += this.speed;
+                if (keys.ArrowUp || keys.w) dy -= this.speed;
+                if (keys.ArrowDown || keys.s) dy += this.speed;
             }
+
+            // Normalizar el movimiento diagonal
+            if (dx !== 0 && dy !== 0) {
+                const factor = 1 / Math.sqrt(2);
+                dx *= factor;
+                dy *= factor;
+            }
+
+            this.x += dx;
+            this.y += dy;
 
             // Limitar al jugador dentro del mapa
             this.x = Math.max(this.size, Math.min(camera.mapWidth - this.size, this.x));
@@ -372,10 +395,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         setAvatar(imageUrl) {
+            if (imageUrl === this.avatarUrl) return; // Evitar recargar la misma imagen
+            
+            this.avatarUrl = imageUrl;
             const img = new Image();
             img.onload = () => {
                 this.avatar = img;
                 this.avatarLoaded = true;
+            };
+            img.onerror = () => {
+                console.error('Error al cargar el avatar');
+                this.avatarLoaded = false;
+                this.avatar = null;
             };
             img.src = imageUrl;
         }
@@ -390,7 +421,7 @@ document.addEventListener('DOMContentLoaded', () => {
     ajustarCanvas();
     window.addEventListener('resize', ajustarCanvas);
 
-    // Control de teclas
+    // Control de teclas mejorado
     const keys = {
         ArrowLeft: false,
         ArrowRight: false,
@@ -403,35 +434,41 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     window.addEventListener('keydown', (e) => {
-        if (keys.hasOwnProperty(e.key.toLowerCase())) {
-            keys[e.key.toLowerCase()] = true;
+        const key = e.key.toLowerCase();
+        if (keys.hasOwnProperty(key)) {
+            keys[key] = true;
             e.preventDefault();
         }
     });
 
     window.addEventListener('keyup', (e) => {
-        if (keys.hasOwnProperty(e.key.toLowerCase())) {
-            keys[e.key.toLowerCase()] = false;
+        const key = e.key.toLowerCase();
+        if (keys.hasOwnProperty(key)) {
+            keys[key] = false;
         }
     });
+
+    // Variables globales adicionales para el disparo automático
+    let isMouseDown = false;
+    let lastAutoShot = 0;
+    const AUTO_SHOT_DELAY = 250; // Tiempo entre disparos automáticos (en milisegundos)
 
     // Manejo de disparos
-    canvas.addEventListener('click', (e) => {
-        if (myId && players.has(myId)) {
-            const player = players.get(myId);
-            if (!player.isDead) {
-                const rect = canvas.getBoundingClientRect();
-                const x = e.clientX - rect.left + camera.x;
-                const y = e.clientY - rect.top + camera.y;
-                player.shoot(x, y);
-
-                socket.emit('playerShoot', { x, y });
-            }
-        }
+    canvas.addEventListener('mousedown', (e) => {
+        isMouseDown = true;
+        handleShot(e);
     });
 
-    // Añadir indicador visual de disparo
+    canvas.addEventListener('mouseup', () => {
+        isMouseDown = false;
+    });
+
     canvas.addEventListener('mousemove', (e) => {
+        if (isMouseDown) {
+            handleShot(e);
+        }
+
+        // Dibujar línea de mira
         if (myId && players.has(myId)) {
             const player = players.get(myId);
             if (!player.isDead) {
@@ -439,10 +476,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const mouseX = e.clientX - rect.left;
                 const mouseY = e.clientY - rect.top;
                 
-                // Dibujar línea de mira
                 ctx.setLineDash([5, 5]);
                 ctx.beginPath();
-                ctx.moveTo(player.x, player.y);
+                ctx.moveTo(player.x - camera.x, player.y - camera.y);
                 ctx.lineTo(mouseX, mouseY);
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
                 ctx.stroke();
@@ -450,6 +486,23 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
+
+    function handleShot(e) {
+        if (myId && players.has(myId)) {
+            const player = players.get(myId);
+            const now = Date.now();
+            
+            if (!player.isDead && now - lastAutoShot >= AUTO_SHOT_DELAY) {
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left + camera.x;
+                const y = e.clientY - rect.top + camera.y;
+                player.shoot(x, y);
+
+                socket.emit('playerShoot', { x, y });
+                lastAutoShot = now;
+            }
+        }
+    }
 
     // Funciones de actualización
     function updatePlayerCount() {
@@ -502,21 +555,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Chat
-    chatInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter' && chatInput.value.trim() && myId) {
-            const message = chatInput.value.trim();
-            const myPlayer = players.get(myId);
-            
-            socket.emit('chatMessage', {
-                name: myPlayer.name,
-                message: message
-            });
-
-            chatInput.value = '';
-        }
-    });
-
     // Iniciar juego
     function startGame() {
         playerName = nombreInput.value.trim();
@@ -533,14 +571,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
         socket.on('init', (data) => {
             myId = data.id;
+            
+            // Crear nuestro jugador
             const newPlayer = new Player(
-                Math.random() * (canvas.width - 100) + 50,
-                Math.random() * (canvas.height - 100) + 50,
+                Math.random() * (camera.mapWidth - 200) + 100,
+                Math.random() * (camera.mapHeight - 200) + 100,
                 `hsl(${Math.random() * 360}, 70%, 50%)`,
                 playerName
             );
             newPlayer.setAvatar(avatarUrl);
             players.set(myId, newPlayer);
+
+            // Inicializar jugadores existentes
+            if (data.players) {
+                data.players.forEach(playerData => {
+                    if (playerData.id !== myId) {
+                        const player = new Player(
+                            playerData.x,
+                            playerData.y,
+                            `hsl(${Math.random() * 360}, 70%, 50%)`,
+                            playerData.name
+                        );
+                        if (playerData.avatarUrl) {
+                            player.setAvatar(playerData.avatarUrl);
+                        }
+                        player.score = playerData.score || 0;
+                        player.health = playerData.health;
+                        player.isDead = playerData.isDead;
+                        players.set(playerData.id, player);
+                    }
+                });
+            }
+            
             updatePlayerCount();
         });
 
@@ -609,58 +671,46 @@ document.addEventListener('DOMContentLoaded', () => {
             updatePlayerCount();
         });
 
-        socket.on('chatMessage', (data) => {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = 'chat-message';
-            messageDiv.innerHTML = `<span class="player-name">${data.name}:</span> ${data.message}`;
-            chatMessages.appendChild(messageDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        });
-
         gameLoop();
     }
 
-    // Game Loop
-    function gameLoop() {
-        // Actualizar posición de la cámara
-        if (myId && players.has(myId)) {
-            const player = players.get(myId);
-            camera.x = player.x - canvas.width / 2;
-            camera.y = player.y - canvas.height / 2;
+    // Modificar la emisión de datos del jugador
+    function emitPlayerData(player) {
+        if (socket && socket.connected) {
+            socket.emit('playerMove', {
+                x: player.x,
+                y: player.y,
+                name: player.name,
+                score: player.score,
+                health: player.health,
+                isDead: player.isDead,
+                bullets: player.bullets.map(b => ({x: b.x, y: b.y})),
+                avatarUrl: player.avatarUrl
+            });
+        }
+    }
 
-            // Limitar la cámara a los bordes del mapa
+    // Modificar el gameLoop para usar la nueva función de emisión
+    function gameLoop() {
+        if (myId && players.has(myId)) {
+            const myPlayer = players.get(myId);
+            myPlayer.update(keys);
+            emitPlayerData(myPlayer);
+            
+            // Actualizar posición de la cámara
+            camera.x = myPlayer.x - canvas.width / 2;
+            camera.y = myPlayer.y - canvas.height / 2;
             camera.x = Math.max(0, Math.min(camera.x, camera.mapWidth - canvas.width));
             camera.y = Math.max(0, Math.min(camera.y, camera.mapHeight - canvas.height));
         }
 
-        // Limpiar canvas
+        // Limpiar y dibujar
         ctx.fillStyle = '#2a2a2a';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        // Dibujar cuadrícula del mapa
         drawMapGrid();
-
-        // Actualizar y dibujar jugadores
-        if (myId && players.has(myId)) {
-            const myPlayer = players.get(myId);
-            myPlayer.update(keys);
-            
-            if (socket && socket.connected) {
-                socket.emit('playerMove', {
-                    x: myPlayer.x,
-                    y: myPlayer.y,
-                    name: playerName,
-                    score: myPlayer.score,
-                    health: myPlayer.health,
-                    isDead: myPlayer.isDead,
-                    bullets: myPlayer.bullets.map(b => ({x: b.x, y: b.y})),
-                    avatarUrl: document.getElementById('avatarPreview').src
-                });
-            }
-        }
-
         checkBulletCollisions();
         players.forEach(player => player.draw());
+        
         requestAnimationFrame(gameLoop);
     }
 
