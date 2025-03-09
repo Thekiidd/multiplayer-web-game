@@ -1,34 +1,27 @@
 // Esperar a que el DOM esté completamente cargado
 document.addEventListener('DOMContentLoaded', () => {
     // Elementos del DOM
-    const menuPlataforma = document.getElementById('menuPlataforma');
     const menuInicial = document.getElementById('menuInicial');
     const gameContainer = document.querySelector('.game-container');
     const nombreInput = document.getElementById('nombreJugador');
     const botonJugar = document.getElementById('botonJugar');
-    const botonWeb = document.getElementById('botonWeb');
-    const botonMovil = document.getElementById('botonMovil');
     const mobileControls = document.getElementById('mobileControls');
     const playerCountElement = document.getElementById('playerCount');
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
-    const chatMessages = document.getElementById('chatMessages');
-    const chatInput = document.getElementById('chatInput');
     const scoreList = document.getElementById('scoreList');
-    const botonRegresar = document.getElementById('botonRegresar');
 
-    // Variables globales
-    let socket;
-    const players = new Map();
-    let myId = null;
-    let playerName = '';
-    let isMobile = false; // Nueva variable para determinar la plataforma
+   // Variables globales
+   let socket;
+   const players = new Map();
+   let myId = null;
+   let playerName = '';
+   let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent); // Detectar móvil
 
-    // Variables para el joystick
-    let joystickActive = false;
-    let joystickBase = document.querySelector('.joystick-base');
-    let joystickStick = document.querySelector('.joystick-stick');
-    let joystickData = { x: 0, y: 0 };
+    // Mostrar controles móviles si es un dispositivo móvil
+    if (isMobile) {
+        mobileControls.style.display = 'block';
+    }
 
     // Sistema de sonidos
     const sounds = {
@@ -69,8 +62,8 @@ document.addEventListener('DOMContentLoaded', () => {
         data: { x: 0, y: 0 }
     };
 
-    // Función para manejar los joysticks
-    function handleJoystick(joystick, e) {
+     // Función para manejar los joysticks
+     function handleJoystick(joystick, e) {
         const touch = e.touches[0];
         const rect = joystick.base.getBoundingClientRect();
         const centerX = rect.left + rect.width / 2;
@@ -107,37 +100,39 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Eventos para los joysticks
-    moveJoystick.base.addEventListener('touchstart', (e) => {
-        moveJoystick.active = true;
-        handleJoystick(moveJoystick, e);
-    });
-
-    aimJoystick.base.addEventListener('touchstart', (e) => {
-        aimJoystick.active = true;
-        handleJoystick(aimJoystick, e);
-    });
-
-    document.addEventListener('touchmove', (e) => {
-        if (moveJoystick.active) {
+    if (isMobile) {
+        moveJoystick.base.addEventListener('touchstart', (e) => {
+            moveJoystick.active = true;
             handleJoystick(moveJoystick, e);
-        }
-        if (aimJoystick.active) {
-            handleJoystick(aimJoystick, e);
-        }
-    });
+        });
 
-    document.addEventListener('touchend', (e) => {
-        if (moveJoystick.active) {
-            moveJoystick.active = false;
-            moveJoystick.stick.style.transform = 'translate(-50%, -50%)';
-            moveJoystick.data = { x: 0, y: 0 };
-        }
-        if (aimJoystick.active) {
-            aimJoystick.active = false;
-            aimJoystick.stick.style.transform = 'translate(-50%, -50%)';
-            aimJoystick.data = { x: 0, y: 0 };
-        }
-    });
+        aimJoystick.base.addEventListener('touchstart', (e) => {
+            aimJoystick.active = true;
+            handleJoystick(aimJoystick, e);
+        });
+
+        document.addEventListener('touchmove', (e) => {
+            if (moveJoystick.active) {
+                handleJoystick(moveJoystick, e);
+            }
+            if (aimJoystick.active) {
+                handleJoystick(aimJoystick, e);
+            }
+        });
+
+        document.addEventListener('touchend', (e) => {
+            if (moveJoystick.active) {
+                moveJoystick.active = false;
+                moveJoystick.stick.style.transform = 'translate(-50%, -50%)';
+                moveJoystick.data = { x: 0, y: 0 };
+            }
+            if (aimJoystick.active) {
+                aimJoystick.active = false;
+                aimJoystick.stick.style.transform = 'translate(-50%, -50%)';
+                aimJoystick.data = { x: 0, y: 0 };
+            }
+        });
+    }
 
     // Eventos para la selección de plataforma
     botonWeb.addEventListener('click', () => {
@@ -163,11 +158,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const GAME_CONSTANTS = {
         PLAYER_SPEED: 5,
         PLAYER_SIZE: 30,
-        BULLET_SPEED: 20,
+        BULLET_SPEED: 25,
         BULLET_SIZE: 8,
+        BULLET_DAMAGE: 35,
         PLAYER_MAX_HEALTH: 100,
-        POWER_DURATION: 10000, // 10 segundos
-        POWER_SPAWN_INTERVAL: 15000 // 15 segundos
+        POWER_DURATION: 10000,
+        POWER_SPAWN_INTERVAL: 15000,
+        SYNC_RATE: 16,
+        INTERPOLATION_DELAY: 100
     };
 
     // Sistema de poderes
@@ -694,22 +692,30 @@ document.addEventListener('DOMContentLoaded', () => {
                     const distance = Math.sqrt(dx * dx + dy * dy);
 
                     if (distance < player.size + bullet.size) {
-                        // Marcar la bala para eliminar
                         bulletsToRemove.push(bulletIndex);
 
-                        // Efecto visual de impacto
+                        // Efecto visual de impacto mejorado
                         ctx.beginPath();
-                        ctx.arc(bullet.x - camera.x, bullet.y - camera.y, 20, 0, Math.PI * 2);
-                        ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+                        ctx.arc(bullet.x - camera.x, bullet.y - camera.y, 25, 0, Math.PI * 2);
+                        ctx.fillStyle = 'rgba(255, 0, 0, 0.4)';
                         ctx.fill();
 
-                        // Aplicar daño al jugador impactado
-                        player.takeDamage(25, otherPlayerId);
+                        // Calcular daño con multiplicador
+                        let finalDamage = GAME_CONSTANTS.BULLET_DAMAGE;
+                        if (otherPlayer.damageMultiplier > 1) {
+                            finalDamage *= otherPlayer.damageMultiplier;
+                        }
 
-                        // Si el jugador muere, actualizar la puntuación del atacante
-                        if (player.isDead) {
-                            otherPlayer.score += 1;
-                            updateScoreboard();
+                        // Aplicar daño al jugador impactado
+                        player.takeDamage(finalDamage, otherPlayerId);
+
+                        // Notificar el impacto al servidor
+                        if (socket && socket.connected && otherPlayerId === myId) {
+                            socket.emit('bulletHit', {
+                                targetId: playerId,
+                                damage: finalDamage,
+                                shooterId: myId
+                            });
                         }
                     }
                 });
@@ -730,15 +736,13 @@ document.addEventListener('DOMContentLoaded', () => {
         menuInicial.style.display = 'none';
         gameContainer.style.display = 'block';
         
-        // Desconectar socket existente si hay uno
         if (socket) {
             socket.disconnect();
         }
         
-        // Determinar la URL del servidor
         const isProduction = window.location.hostname !== 'localhost';
         const serverUrl = isProduction 
-            ? 'https://multiplayer-web-game-063s.onrender.com' // URL del servidor en Render
+            ? 'https://multiplayer-web-game-063s.onrender.com'
             : 'http://localhost:3000';
             
         socket = io(serverUrl, {
@@ -801,18 +805,29 @@ document.addEventListener('DOMContentLoaded', () => {
         socket.on('playerMoved', (data) => {
             if (players.has(data.id)) {
                 const player = players.get(data.id);
-                player.x = data.x;
-                player.y = data.y;
+                
+                // Interpolar posición
+                interpolatePosition(player, data);
+                
+                // Actualizar otros datos
                 player.score = data.score || 0;
                 player.health = data.health;
                 player.isDead = data.isDead;
+                
+                // Actualizar poderes
+                if (data.powers) {
+                    player.hasShield = data.powers.hasShield;
+                    player.damageMultiplier = data.powers.damageMultiplier;
+                    player.speed = data.powers.speed;
+                }
                 
                 if (data.avatarUrl && !player.avatarLoaded) {
                     player.setAvatar(data.avatarUrl);
                 }
                 
+                // Actualizar balas con ángulo correcto
                 player.bullets = data.bullets.map(b => {
-                    const bullet = new Bullet(b.x, b.y, 0);
+                    const bullet = new Bullet(b.x, b.y, b.angle || 0);
                     bullet.x = b.x;
                     bullet.y = b.y;
                     return bullet;
@@ -870,11 +885,12 @@ document.addEventListener('DOMContentLoaded', () => {
         gameLoop();
     }
 
-    // Modificar la emisión de datos del jugador
+    // Modificar la emisión de datos del jugador para mejor sincronización
     function emitPlayerData(player) {
         if (socket && socket.connected) {
-            // Enviar solo los datos esenciales
+            const now = Date.now();
             const minimalData = {
+                timestamp: now,
                 x: Math.round(player.x),
                 y: Math.round(player.y),
                 name: player.name,
@@ -883,11 +899,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 isDead: player.isDead,
                 bullets: player.bullets.map(b => ({
                     x: Math.round(b.x),
-                    y: Math.round(b.y)
-                })).slice(-5) // Limitar a las 5 balas más recientes
+                    y: Math.round(b.y),
+                    angle: b.angle
+                })).slice(-5),
+                powers: {
+                    hasShield: player.hasShield,
+                    damageMultiplier: player.damageMultiplier,
+                    speed: player.speed
+                }
             };
             
-            // Solo enviar el avatarUrl si ha cambiado
             if (player.avatarUrl !== player._lastSentAvatarUrl) {
                 minimalData.avatarUrl = player.avatarUrl;
                 player._lastSentAvatarUrl = player.avatarUrl;
@@ -897,10 +918,34 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Modificar el gameLoop para reducir la frecuencia de emisión
-    let lastEmitTime = 0;
-    const EMIT_INTERVAL = 50; // Emitir cada 50ms (20 veces por segundo)
+    // Agregar interpolación de movimiento
+    function interpolatePosition(player, newData) {
+        const timestamp = Date.now();
+        player.targetX = newData.x;
+        player.targetY = newData.y;
+        player.startX = player.x;
+        player.startY = player.y;
+        player.interpolationStart = timestamp;
+        player.interpolationEnd = timestamp + GAME_CONSTANTS.INTERPOLATION_DELAY;
+    }
 
+    // Modificar el gameLoop para incluir interpolación
+    function updatePlayerPositions() {
+        const now = Date.now();
+        players.forEach(player => {
+            if (player.interpolationStart && player.interpolationEnd) {
+                const progress = (now - player.interpolationStart) / 
+                               (player.interpolationEnd - player.interpolationStart);
+                
+                if (progress <= 1) {
+                    player.x = player.startX + (player.targetX - player.startX) * progress;
+                    player.y = player.startY + (player.targetY - player.startY) * progress;
+                }
+            }
+        });
+    }
+
+    // Actualizar el gameLoop
     function gameLoop() {
         if (myId && players.has(myId)) {
             const myPlayer = players.get(myId);
@@ -923,28 +968,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
             
-            // Limitar la frecuencia de emisión
             const now = Date.now();
-            if (now - lastEmitTime >= EMIT_INTERVAL) {
+            if (now - lastEmitTime >= GAME_CONSTANTS.SYNC_RATE) {
                 emitPlayerData(myPlayer);
                 lastEmitTime = now;
             }
             
-            // Actualizar posición de la cámara
+            // Actualizar cámara
             camera.x = myPlayer.x - canvas.width / 2;
             camera.y = myPlayer.y - canvas.height / 2;
             camera.x = Math.max(0, Math.min(camera.x, camera.mapWidth - canvas.width));
             camera.y = Math.max(0, Math.min(camera.y, camera.mapHeight - canvas.height));
         }
 
-        // Limpiar y dibujar
+        // Actualizar posiciones interpoladas
+        updatePlayerPositions();
+
+        // Renderizar
         ctx.fillStyle = '#2a2a2a';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         drawMapGrid();
         checkBulletCollisions();
         players.forEach(player => player.draw());
-        
-        // Dibujar power-ups
         activePowerUps.forEach(powerUp => powerUp.draw());
         
         requestAnimationFrame(gameLoop);
@@ -989,6 +1034,17 @@ document.addEventListener('DOMContentLoaded', () => {
     nombreInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter' && !botonJugar.disabled) {
             startGame();
+        }
+    });
+
+    document.getElementById('playerAvatar').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('avatarPreview').src = e.target.result;
+            };
+            reader.readAsDataURL(file);
         }
     });
 
