@@ -245,6 +245,7 @@ document.addEventListener('DOMContentLoaded', () => {
             this.avatar = null;
             this.avatarLoaded = false;
             this.avatarUrl = null;
+            this._lastSentAvatarUrl = null;
         }
 
         draw() {
@@ -689,25 +690,45 @@ document.addEventListener('DOMContentLoaded', () => {
     // Modificar la emisión de datos del jugador
     function emitPlayerData(player) {
         if (socket && socket.connected) {
-            socket.emit('playerMove', {
-                x: player.x,
-                y: player.y,
+            // Enviar solo los datos esenciales
+            const minimalData = {
+                x: Math.round(player.x),
+                y: Math.round(player.y),
                 name: player.name,
                 score: player.score,
                 health: player.health,
                 isDead: player.isDead,
-                bullets: player.bullets.map(b => ({x: b.x, y: b.y})),
-                avatarUrl: player.avatarUrl
-            });
+                bullets: player.bullets.map(b => ({
+                    x: Math.round(b.x),
+                    y: Math.round(b.y)
+                })).slice(-5) // Limitar a las 5 balas más recientes
+            };
+            
+            // Solo enviar el avatarUrl si ha cambiado
+            if (player.avatarUrl !== player._lastSentAvatarUrl) {
+                minimalData.avatarUrl = player.avatarUrl;
+                player._lastSentAvatarUrl = player.avatarUrl;
+            }
+
+            socket.emit('playerMove', minimalData);
         }
     }
 
-    // Modificar el gameLoop para usar la nueva función de emisión
+    // Modificar el gameLoop para reducir la frecuencia de emisión
+    let lastEmitTime = 0;
+    const EMIT_INTERVAL = 50; // Emitir cada 50ms (20 veces por segundo)
+
     function gameLoop() {
         if (myId && players.has(myId)) {
             const myPlayer = players.get(myId);
             myPlayer.update(keys);
-            emitPlayerData(myPlayer);
+            
+            // Limitar la frecuencia de emisión
+            const now = Date.now();
+            if (now - lastEmitTime >= EMIT_INTERVAL) {
+                emitPlayerData(myPlayer);
+                lastEmitTime = now;
+            }
             
             // Actualizar posición de la cámara
             camera.x = myPlayer.x - canvas.width / 2;
