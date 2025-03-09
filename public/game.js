@@ -334,7 +334,7 @@ document.addEventListener('DOMContentLoaded', () => {
             this.bullets = []; // Limpiar balas al morir
             playSound('explosion');
             
-            if (socket && socket.connected) {
+            if (socket && socket.connected && myId === this.id) {
                 socket.emit('playerDied', {
                     id: myId,
                     killerId: this.lastDamageFrom
@@ -688,11 +688,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 player.isDead = true;
                 player.health = 0;
                 player.respawnTime = Date.now() + 3000;
+                player.bullets = []; // Limpiar balas del jugador muerto
                 
-                if (data.killerId === myId) {
+                // Solo actualizar el score si somos el asesino
+                if (data.killerId && data.killerId === myId) {
                     const myPlayer = players.get(myId);
-                    myPlayer.score += 1;
-                    updateScoreboard();
+                    if (myPlayer && !myPlayer.isDead) {
+                        myPlayer.score += 1;
+                        updateScoreboard();
+                    }
                 }
             }
         });
