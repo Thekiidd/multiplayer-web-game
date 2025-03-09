@@ -315,18 +315,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         takeDamage(damage, attackerId) {
-            this.health -= damage;
+            if (this.isDead) return; // No aplicar daño si ya está muerto
+            
+            this.health = Math.max(0, this.health - damage);
             this.lastDamageFrom = attackerId;
             
-            if (this.health <= 0 && !this.isDead) {
+            if (this.health <= 0) {
                 this.die();
             }
         }
 
         die() {
+            if (this.isDead) return; // Evitar muerte múltiple
+            
             this.isDead = true;
             this.health = 0;
             this.respawnTime = Date.now() + 3000;
+            this.bullets = []; // Limpiar balas al morir
             playSound('explosion');
             
             if (socket && socket.connected) {
@@ -532,25 +537,36 @@ document.addEventListener('DOMContentLoaded', () => {
             players.forEach((otherPlayer, otherPlayerId) => {
                 if (playerId === otherPlayerId || otherPlayer.isDead) return;
 
+                const bulletsToRemove = [];
                 otherPlayer.bullets.forEach((bullet, bulletIndex) => {
                     const dx = player.x - bullet.x;
                     const dy = player.y - bullet.y;
                     const distance = Math.sqrt(dx * dx + dy * dy);
 
                     if (distance < player.size + bullet.size) {
+                        // Marcar la bala para eliminar
+                        bulletsToRemove.push(bulletIndex);
+
+                        // Efecto visual de impacto
                         ctx.beginPath();
-                        ctx.arc(bullet.x, bullet.y, 20, 0, Math.PI * 2);
+                        ctx.arc(bullet.x - camera.x, bullet.y - camera.y, 20, 0, Math.PI * 2);
                         ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
                         ctx.fill();
 
+                        // Aplicar daño al jugador impactado
                         player.takeDamage(25, otherPlayerId);
-                        otherPlayer.bullets.splice(bulletIndex, 1);
 
+                        // Si el jugador muere, actualizar la puntuación del atacante
                         if (player.isDead) {
                             otherPlayer.score += 1;
                             updateScoreboard();
                         }
                     }
+                });
+
+                // Eliminar las balas que impactaron
+                bulletsToRemove.reverse().forEach(index => {
+                    otherPlayer.bullets.splice(index, 1);
                 });
             });
         });
@@ -572,12 +588,16 @@ document.addEventListener('DOMContentLoaded', () => {
         // Determinar la URL del servidor
         const isProduction = window.location.hostname !== 'localhost';
         const serverUrl = isProduction 
-            ? 'https://multiplayer-web-game-063s.onrender.com' // URL de tu servidor en Render
+            ? 'https://multiplayer-web-game-063s.onrender.com' // URL del servidor en Render
             : 'http://localhost:3000';
             
         socket = io(serverUrl, {
             transports: ['websocket'],
-            upgrade: false
+            upgrade: false,
+            cors: {
+                origin: "https://multiplayer-web-game.vercel.app",
+                methods: ["GET", "POST"]
+            }
         });
 
         socket.on('connect', () => {
