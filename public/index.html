@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Juego Multijugador</title>
+    <title>NeoArena: Batalla Futurista</title>
     <link rel="stylesheet" href="styles.css">
     <!-- Three.js (se cargará condicionalmente) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -17,21 +17,23 @@
     <!-- Menú Inicial -->
     <div id="menuInicial">
         <div class="menu-contenido">
-            <h1>¡Bienvenido al Juego!</h1>
-            <input type="text" id="nombreJugador" class="menu-input" placeholder="Ingresa tu nombre" maxlength="15">
-            <div class="version-selector">
-                <label>Selecciona la versión:</label>
-                <div class="version-buttons">
-                    <button class="version-button selected" data-version="2d">2D</button>
-                    <button class="version-button" data-version="3d">3D (Beta)</button>
+            <h1>NeoArena</h1>
+            <div class="construction-notice">
+                <h2>🚧 Juego en Desarrollo 🚧</h2>
+                <p>Este videojuego está actualmente en fase de desarrollo.</p>
+                <p>Estamos trabajando para crear una experiencia única de combate futurista.</p>
+                <p>¡Vuelve pronto para más novedades!</p>
+                <div class="features-coming">
+                    <h3>Próximamente:</h3>
+                    <ul>
+                        <li>✨ Modo multijugador</li>
+                        <li>🎮 Nuevas armas y habilidades</li>
+                        <li>🌍 Mapas adicionales</li>
+                        <li>🏆 Sistema de rankings</li>
+                    </ul>
                 </div>
             </div>
-            <div class="avatar-selector">
-                <label for="playerAvatar">Selecciona tu avatar:</label>
-                <input type="file" id="playerAvatar" accept="image/*">
-                <img id="avatarPreview" src="https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y" alt="Avatar preview" style="width: 100px; height: 100px; object-fit: cover;">
-            </div>
-            <button id="botonJugar" class="menu-boton">¡Jugar!</button>
+            <button id="botonJugar" class="menu-boton" disabled>Próximamente</button>
         </div>
     </div>
 
@@ -117,4 +119,5 @@
         });
     </script>
 </body>
+</html> 
 </html> 
