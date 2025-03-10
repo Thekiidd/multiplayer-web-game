@@ -390,13 +390,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             if (this.avatarLoaded && this.avatar) {
-                ctx.save();
-                ctx.beginPath();
-                ctx.arc(screenX, screenY, this.size, 0, Math.PI * 2);
-                ctx.closePath();
-                ctx.clip();
-                ctx.drawImage(this.avatar, screenX - this.size, screenY - this.size, this.size * 2, this.size * 2);
-                ctx.restore();
+                try {
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(screenX, screenY, this.size, 0, Math.PI * 2);
+                    ctx.closePath();
+                    ctx.clip();
+                    ctx.drawImage(this.avatar, screenX - this.size, screenY - this.size, this.size * 2, this.size * 2);
+                    ctx.restore();
+                } catch (error) {
+                    console.error('Error al dibujar avatar:', error);
+                }
             } else {
                 ctx.fillStyle = this.color;
                 ctx.beginPath();
@@ -534,19 +538,33 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         setAvatar(imageUrl) {
-            if (imageUrl === this.avatarUrl) return;
+            if (!imageUrl || imageUrl === this.avatarUrl) return;
+            
             this.avatarUrl = imageUrl;
+            this.avatarLoaded = false; // Reset loaded state
+            
             const img = new Image();
+            
             img.onload = () => {
+                console.log('Avatar cargado correctamente');
                 this.avatar = img;
                 this.avatarLoaded = true;
             };
-            img.onerror = () => {
-                console.error('Error al cargar el avatar');
+            
+            img.onerror = (error) => {
+                console.error('Error al cargar el avatar:', error);
                 this.avatarLoaded = false;
                 this.avatar = null;
             };
-            img.src = imageUrl;
+            
+            // Asegurarse de que la URL sea válida
+            try {
+                const url = new URL(imageUrl);
+                img.src = url.toString();
+            } catch (e) {
+                console.error('URL de avatar inválida:', e);
+                img.src = imageUrl; // Intentar cargar de todos modos si es una URL relativa
+            }
         }
 
         applyPower(powerType) {
@@ -692,15 +710,18 @@ document.addEventListener('DOMContentLoaded', () => {
             upgrade: false,
             cors: { origin: "https://multiplayer-web-game.vercel.app", methods: ["GET", "POST"] }
         });
-    
-        socket.on('connect', () => console.log('¡Conectado al servidor!'));
-        socket.on('serverFull', () => {
-            alert('El servidor está lleno. Por favor, intenta más tarde.');
-            menuInicial.style.display = 'flex';
-            gameContainer.style.display = 'none';
-            socket.disconnect();
+
+        socket.on('connect', () => {
+            console.log('¡Conectado al servidor!');
+            // Inicializar jugador después de la conexión
+            if (myId && players.has(myId)) {
+                const player = players.get(myId);
+                if (avatarUrl) {
+                    player.setAvatar(avatarUrl);
+                }
+            }
         });
-    
+
         socket.on('init', (data) => {
             myId = data.id;
             const newPlayer = new Player(
@@ -709,14 +730,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 `hsl(${Math.random() * 360}, 70%, 50%)`,
                 playerName
             );
-            newPlayer.setAvatar(avatarUrl);
+            
+            // Asegurarse de que el avatar se cargue
+            if (avatarUrl) {
+                newPlayer.setAvatar(avatarUrl);
+            }
+            
             players.set(myId, newPlayer);
     
             if (data.players) {
                 data.players.forEach(playerData => {
                     if (playerData.id !== myId) {
-                        const player = new Player(playerData.x, playerData.y, `hsl(${Math.random() * 360}, 70%, 50%)`, playerData.name);
-                        if (playerData.avatarUrl) player.setAvatar(playerData.avatarUrl);
+                        const player = new Player(
+                            playerData.x, 
+                            playerData.y, 
+                            `hsl(${Math.random() * 360}, 70%, 50%)`, 
+                            playerData.name
+                        );
+                        if (playerData.avatarUrl) {
+                            player.setAvatar(playerData.avatarUrl);
+                        }
                         player.score = playerData.score || 0;
                         player.health = playerData.health;
                         player.isDead = playerData.isDead;
