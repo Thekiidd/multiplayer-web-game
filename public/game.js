@@ -198,12 +198,12 @@ document.addEventListener('DOMContentLoaded', () => {
         PLAYER_SIZE: 30,
         BULLET_SPEED: 30,
         BULLET_SIZE: 8,
-        BULLET_DAMAGE: 50,
+        BULLET_DAMAGE: 35,
         PLAYER_MAX_HEALTH: 100,
         POWER_DURATION: 10000,
         POWER_SPAWN_INTERVAL: 15000,
         SYNC_RATE: 16,
-        INTERPOLATION_DELAY: 100
+        INTERPOLATION_DELAY: 50
     };
 
     // Sistema de poderes
@@ -687,8 +687,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         let finalDamage = GAME_CONSTANTS.BULLET_DAMAGE;
                         if (otherPlayer.damageMultiplier > 1) finalDamage *= otherPlayer.damageMultiplier;
                         player.takeDamage(finalDamage, otherPlayerId);
+                        
+                        // Emitir el daño inmediatamente
                         if (socket && socket.connected && otherPlayerId === myId) {
-                            socket.emit('bulletHit', { targetId: playerId, damage: finalDamage, shooterId: myId });
+                            socket.emit('bulletHit', { 
+                                targetId: playerId, 
+                                damage: finalDamage, 
+                                shooterId: myId,
+                                targetHealth: player.health
+                            });
                         }
                     }
                 });
@@ -768,25 +775,39 @@ document.addEventListener('DOMContentLoaded', () => {
             if (players.has(data.id)) {
                 const player = players.get(data.id);
                 interpolatePosition(player, data);
-                player.score = data.score || 0; // Actualizar puntaje desde el servidor
+                player.score = data.score || player.score || 0;
                 player.health = data.health;
                 player.isDead = data.isDead;
+                player.killStreak = data.killStreak || 0;
+                
                 if (data.powers) {
                     player.hasShield = data.powers.hasShield;
                     player.damageMultiplier = data.powers.damageMultiplier;
                     player.speed = data.powers.speed;
                 }
-                if (data.avatarUrl && !player.avatarLoaded) player.setAvatar(data.avatarUrl);
-                player.bullets = data.bullets.map(b => {
-                    const bullet = new Bullet(b.x, b.y, b.angle || 0);
-                    bullet.x = b.x;
-                    bullet.y = b.y;
-                    return bullet;
-                });
+                
+                if (data.avatarUrl && !player.avatarLoaded) {
+                    player.setAvatar(data.avatarUrl);
+                }
+                
+                // Actualizar las balas con interpolación
+                if (data.bullets && data.bullets.length > 0) {
+                    player.bullets = data.bullets.map(b => {
+                        const bullet = new Bullet(b.x, b.y, b.angle || 0);
+                        bullet.x = b.x;
+                        bullet.y = b.y;
+                        return bullet;
+                    });
+                }
+                
+                updateScoreboard();
             } else {
                 const newPlayer = new Player(data.x, data.y, `hsl(${Math.random() * 360}, 70%, 50%)`, data.name || 'Jugador');
                 if (data.avatarUrl) newPlayer.setAvatar(data.avatarUrl);
                 newPlayer.score = data.score || 0;
+                newPlayer.health = data.health;
+                newPlayer.isDead = data.isDead;
+                newPlayer.killStreak = data.killStreak || 0;
                 players.set(data.id, newPlayer);
                 updatePlayerCount();
             }
@@ -837,6 +858,16 @@ document.addEventListener('DOMContentLoaded', () => {
             updatePlayerCount();
         });
     
+        socket.on('bulletHit', (data) => {
+            if (players.has(data.targetId)) {
+                const player = players.get(data.targetId);
+                player.health = data.targetHealth;
+                if (player.health <= 0 && !player.isDead) {
+                    player.die();
+                }
+            }
+        });
+    
         gameLoop();
     }
 
@@ -848,17 +879,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 x: Math.round(player.x),
                 y: Math.round(player.y),
                 name: player.name,
-                score: player.score || 0, // Asegurar que score nunca sea undefined
+                score: player.score || 0,
                 health: player.health,
                 isDead: player.isDead,
-                bullets: player.bullets.map(b => ({ x: Math.round(b.x), y: Math.round(b.y), angle: b.angle })).slice(-5),
-                powers: { hasShield: player.hasShield, damageMultiplier: player.damageMultiplier, speed: player.speed },
-                killStreak: player.killStreak || 0 // Añadir killStreak a los datos enviados
+                bullets: player.bullets.map(b => ({
+                    x: Math.round(b.x),
+                    y: Math.round(b.y),
+                    angle: b.angle,
+                    damage: b.damage
+                })).slice(-5),
+                powers: {
+                    hasShield: player.hasShield,
+                    damageMultiplier: player.damageMultiplier,
+                    speed: player.speed
+                },
+                killStreak: player.killStreak || 0
             };
+            
             if (player.avatarUrl !== player._lastSentAvatarUrl) {
                 minimalData.avatarUrl = player.avatarUrl;
                 player._lastSentAvatarUrl = player.avatarUrl;
             }
+            
             socket.emit('playerMove', minimalData);
         }
     }

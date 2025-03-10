@@ -102,6 +102,64 @@ io.on('connection', (socket) => {
         io.emit('playerDisconnected', playerId);
     });
 
+    socket.on('bulletHit', (data) => {
+        playerLastActivity.set(playerId, Date.now());
+        
+        if (players.has(data.targetId)) {
+            const target = players.get(data.targetId);
+            const shooter = players.get(data.shooterId);
+            
+            if (target && !target.isDead) {
+                target.health = data.targetHealth;
+                
+                // Emitir el daño a todos los jugadores
+                io.emit('bulletHit', {
+                    targetId: data.targetId,
+                    damage: data.damage,
+                    shooterId: data.shooterId,
+                    targetHealth: target.health
+                });
+
+                // Si el jugador muere por el daño
+                if (target.health <= 0) {
+                    target.isDead = true;
+                    target.health = 0;
+                    target.bullets = [];
+                    target.killStreak = 0;
+
+                    if (shooter) {
+                        shooter.score = (shooter.score || 0) + 2;
+                        shooter.killStreak = (shooter.killStreak || 0) + 1;
+                        
+                        if (shooter.killStreak >= 3) {
+                            shooter.score++;
+                        }
+
+                        // Emitir actualización inmediata del estado
+                        io.emit('playerDied', {
+                            id: data.targetId,
+                            killerId: data.shooterId,
+                            killerScore: shooter.score,
+                            killStreak: shooter.killStreak
+                        });
+
+                        // Actualizar estado del asesino
+                        io.emit('playerMoved', {
+                            id: data.shooterId,
+                            ...createUpdateData(shooter, data.shooterId)
+                        });
+                    }
+                }
+
+                // Actualizar estado de la víctima
+                io.emit('playerMoved', {
+                    id: data.targetId,
+                    ...createUpdateData(target, data.targetId)
+                });
+            }
+        }
+    });
+
     socket.on('playerMove', (data) => {
         playerLastActivity.set(playerId, Date.now());
         
@@ -117,10 +175,20 @@ io.on('connection', (socket) => {
             player.health = data.health;
             player.isDead = data.isDead;
             player.bullets = (data.bullets || []).slice(-MEMORY_LIMITS.MAX_BULLETS);
-            player.score = data.score || player.score; // Mantener el puntaje actualizado
+            player.score = data.score;
+            player.killStreak = data.killStreak || 0;
+            if (data.powers) {
+                player.powers = data.powers;
+            }
         }
 
-        socket.broadcast.emit('playerMoved', createUpdateData(players.get(playerId), playerId));
+        // Emitir actualización a todos los jugadores excepto al emisor
+        socket.broadcast.emit('playerMoved', {
+            id: playerId,
+            ...createUpdateData(players.get(playerId), playerId),
+            powers: players.get(playerId).powers,
+            killStreak: players.get(playerId).killStreak
+        });
     });
 
     socket.on('playerShoot', (data) => {

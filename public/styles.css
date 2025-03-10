@@ -16,10 +16,10 @@ body {
     left: 0;
     width: 100vw;
     height: 100vh;
-    user-select: none;
+    -ms-user-select: none;
     -webkit-user-select: none;
     -moz-user-select: none;
-    -ms-user-select: none;
+    user-select: none;
     touch-action: none;
     outline: none;
 }
@@ -339,10 +339,10 @@ body {
 /* Prevenir interacciones con imágenes */
 img {
     pointer-events: none;
-    user-drag: none;
     -webkit-user-drag: none;
-    user-select: none;
+    user-drag: none;
+    -ms-user-select: none;
     -moz-user-select: none;
     -webkit-user-select: none;
-    -ms-user-select: none;
+    user-select: none;
 } 
