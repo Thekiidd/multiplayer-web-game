@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagnóstico de WebGL</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
+        #container { position: relative; width: 100vw; height: 100vh; }
+        #status { position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.7); color: white; padding: 20px; border-radius: 10px; }
+        #content { white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="status">
+            <h2>Diagnóstico de WebGL</h2>
+            <div id="content">Ejecutando pruebas...</div>
+        </div>
+    </div>
+
+    <script>
+        const content = document.getElementById('content');
+        
+        function log(message) {
+            content.textContent += message + '\n';
+        }
+        
+        function checkWebGLSupport() {
+            try {
+                const canvas = document.createElement('canvas');
+                const hasContext = !!(window.WebGLRenderingContext && 
+                    (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')));
+                
+                log(`WebGL soportado: ${hasContext}`);
+                return hasContext;
+            } catch(e) {
+                log(`Error al comprobar WebGL: ${e.message}`);
+                return false;
+            }
+        }
+        
+        function testThreeJS() {
+            try {
+                log('Probando Three.js...');
+                
+                if (typeof THREE === 'undefined') {
+                    log('ERROR: Three.js no está cargado.');
+                    return false;
+                }
+                
+                log('✓ Three.js está cargado correctamente.');
+                
+                // Probar creación de escena
+                const scene = new THREE.Scene();
+                log('✓ Escena creada correctamente.');
+                
+                // Probar creación de cámara
+                const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                camera.position.z = 5;
+                log('✓ Cámara creada correctamente.');
+                
+                // Probar creación de renderer
+                const renderer = new THREE.WebGLRenderer();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                document.getElementById('container').appendChild(renderer.domElement);
+                log('✓ Renderer creado correctamente.');
+                
+                // Crear objeto test
+                const geometry = new THREE.BoxGeometry();
+                const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+                const cube = new THREE.Mesh(geometry, material);
+                scene.add(cube);
+                log('✓ Objeto 3D creado correctamente.');
+                
+                // Intentar renderizar
+                renderer.render(scene, camera);
+                log('✓ Renderizado inicial realizado correctamente.');
+                
+                // Animar para verificar rendimiento
+                log('Probando animación (frames por segundo)...');
+                
+                let frameCount = 0;
+                let lastTime = performance.now();
+                
+                function animate() {
+                    const animationId = requestAnimationFrame(animate);
+                    
+                    frameCount++;
+                    const now = performance.now();
+                    const elapsed = now - lastTime;
+                    
+                    if (elapsed >= 1000) {
+                        const fps = Math.round((frameCount * 1000) / elapsed);
+                        log(`FPS: ${fps}`);
+                        
+                        if (fps < 30) {
+                            log('⚠️ Rendimiento bajo (menos de 30 FPS)');
+                        } else {
+                            log('✓ Rendimiento aceptable');
+                        }
+                        
+                        lastTime = now;
+                        frameCount = 0;
+                        
+                        // Detener animación después de medir FPS
+                        cancelAnimationFrame(animationId);
+                        
+                        log('\nDiagnóstico completado.');
+                        
+                        if (fps < 15) {
+                            log('\n⚠️ RECOMENDACIÓN: Tu dispositivo puede tener problemas para ejecutar el juego 3D. Considera usar el modo 2D o un dispositivo más potente.');
+                        } else {
+                            log('\n✅ Tu dispositivo debería ser capaz de ejecutar el juego 3D.');
+                        }
+                    }
+                    
+                    cube.rotation.x += 0.01;
+                    cube.rotation.y += 0.01;
+                    
+                    renderer.render(scene, camera);
+                }
+                
+                animate();
+                return true;
+                
+            } catch(e) {
+                log(`ERROR en prueba Three.js: ${e.message}`);
+                return false;
+            }
+        }
+        
+        // Ejecutar diagnóstico
+        log('Iniciando diagnóstico...\n');
+        
+        // Información de navegador
+        log(`Navegador: ${navigator.userAgent}`);
+        log(`Ancho de ventana: ${window.innerWidth}px`);
+        log(`Alto de ventana: ${window.innerHeight}px`);
+        log(`Densidad de píxeles: ${window.devicePixelRatio}`);
+        log(`Hardware Concurrency: ${navigator.hardwareConcurrency || 'No disponible'}`);
+        log('');
+        
+        // Comprobar WebGL
+        if (checkWebGLSupport()) {
+            log('Soporte de WebGL detectado. Continuando con pruebas...\n');
+            testThreeJS();
+        } else {
+            log('\n❌ WebGL no soportado en este navegador/dispositivo.');
+            log('Esto significa que no podrás ejecutar el juego en modo 3D.');
+            log('Recomendaciones:');
+            log('1. Actualiza tu navegador a la última versión');
+            log('2. Activa la aceleración de hardware en la configuración del navegador');
+            log('3. Prueba con Chrome o Firefox');
+            log('4. Utiliza el modo 2D del juego');
+        }
+    </script>
+</body>
+</html> 

@@ -406,7 +406,7 @@ function updateChargeUI(chargePercent) {
                 chargeFill.style.background = 'linear-gradient(to right, #ff00ff, #00ffff)';
             } else if (chargePercent > 0.6) {
                 chargeFill.style.background = 'linear-gradient(to right, #00ccff, #00ffff)';
-            } else {
+        } else {
                 chargeFill.style.background = 'linear-gradient(to right, #0066ff, #00ccff)';
             }
         } else {
@@ -827,10 +827,10 @@ function cancelCharge() {
 
 function fireWeapon(chargePercent = 1.0) {
     const weapon = weapons[currentWeapon];
-    const direction = new THREE.Vector3();
-    camera.getWorldDirection(direction);
-    
-    const position = players[myId].mesh.position.clone();
+            const direction = new THREE.Vector3();
+            camera.getWorldDirection(direction);
+            
+            const position = players[myId].mesh.position.clone();
     position.y += 1.5; // Altura de disparo ajustada
     
     // Descontar munición
@@ -885,7 +885,7 @@ function fireWeapon(chargePercent = 1.0) {
     }
     
     lastShootTime = Date.now();
-    shootCooldown = true;
+            shootCooldown = true;
     setTimeout(() => { shootCooldown = false; }, weapon.fireRate);
     
     // Emitir evento al servidor
@@ -1418,17 +1418,17 @@ function render(deltaTime) {
 
 // Función separada para movimiento (optimización)
 function movePlayer(player, moveSpeed, deltaTime) {
-    // Vector de movimiento basado en la dirección de la cámara
-    const moveVector = new THREE.Vector3();
-    
-    if (controls.moveForward) moveVector.z -= 1;
-    if (controls.moveBackward) moveVector.z += 1;
-    if (controls.moveLeft) moveVector.x -= 1;
-    if (controls.moveRight) moveVector.x += 1;
-    
-    // Normalizar el vector si hay movimiento diagonal
-    if (moveVector.length() > 0) {
-        moveVector.normalize();
+        // Vector de movimiento basado en la dirección de la cámara
+        const moveVector = new THREE.Vector3();
+        
+        if (controls.moveForward) moveVector.z -= 1;
+        if (controls.moveBackward) moveVector.z += 1;
+        if (controls.moveLeft) moveVector.x -= 1;
+        if (controls.moveRight) moveVector.x += 1;
+        
+        // Normalizar el vector si hay movimiento diagonal
+        if (moveVector.length() > 0) {
+            moveVector.normalize();
         
         // Sprint con gestión de stamina
         let actualSpeed = moveSpeed;
@@ -1451,22 +1451,22 @@ function movePlayer(player, moveSpeed, deltaTime) {
         }
         
         moveVector.multiplyScalar(actualSpeed);
-        
-        // Rotar el vector de movimiento según la rotación de la cámara
-        const rotationMatrix = new THREE.Matrix4();
-        rotationMatrix.makeRotationY(cameraRotation.y);
-        moveVector.applyMatrix4(rotationMatrix);
+            
+            // Rotar el vector de movimiento según la rotación de la cámara
+            const rotationMatrix = new THREE.Matrix4();
+            rotationMatrix.makeRotationY(cameraRotation.y);
+            moveVector.applyMatrix4(rotationMatrix);
         
         // Almacenar posición anterior para detección de colisiones
         const previousPosition = player.position.clone();
-        
-        // Aplicar movimiento
-        player.position.x += moveVector.x;
-        player.position.z += moveVector.z;
-        
-        // Limitar posición dentro de la arena
-        player.position.x = Math.max(-GAME_CONSTANTS.ARENA_SIZE/2 + 2, Math.min(GAME_CONSTANTS.ARENA_SIZE/2 - 2, player.position.x));
-        player.position.z = Math.max(-GAME_CONSTANTS.ARENA_SIZE/2 + 2, Math.min(GAME_CONSTANTS.ARENA_SIZE/2 - 2, player.position.z));
+            
+            // Aplicar movimiento
+            player.position.x += moveVector.x;
+            player.position.z += moveVector.z;
+            
+            // Limitar posición dentro de la arena
+            player.position.x = Math.max(-GAME_CONSTANTS.ARENA_SIZE/2 + 2, Math.min(GAME_CONSTANTS.ARENA_SIZE/2 - 2, player.position.x));
+            player.position.z = Math.max(-GAME_CONSTANTS.ARENA_SIZE/2 + 2, Math.min(GAME_CONSTANTS.ARENA_SIZE/2 - 2, player.position.z));
         
         // Comprobar colisiones con obstáculos (simplificado)
         detectCollisions(player, previousPosition);
@@ -1599,7 +1599,7 @@ function cleanupGame3D() {
 }
 
 // Iniciar el juego cuando se cargue la página
-window.addEventListener('load', init);
+window.addEventListener('load', init); 
 
 function detectDeviceCapabilities() {
     // Estimar la capacidad del dispositivo basado en cores de CPU y GPU
@@ -2016,44 +2016,139 @@ function createInstancedTrees(count) {
 
 // Modificar init para usar el sistema de calidad
 function init() {
-    // Inicializar administrador de calidad primero
-    qualityManager.init();
+    console.log('Iniciando juego 3D...');
     
-    // Resto del código de inicialización con ajustes según calidad
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x88ccff);
-    
-    const settings = qualityManager.settings[qualityManager.currentQuality];
-    
-    // Configurar niebla según nivel de calidad
-    scene.fog = new THREE.FogExp2(0x88ccff, 1 / (settings.drawDistance * 0.75));
-    
-    // Configurar cámara con distancia de dibujado ajustada
-    camera = new THREE.PerspectiveCamera(
-        75, 
-        window.innerWidth / window.innerHeight, 
-        0.1, 
-        settings.drawDistance
-    );
-    
-    // Configurar renderer con opciones optimizadas
-    renderer = new THREE.WebGLRenderer({ 
-        antialias: qualityManager.currentQuality !== 'low',
-        powerPreference: 'high-performance'
-    });
-    
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    
-    // Ajustar pixel ratio
-    renderer.setPixelRatio(window.devicePixelRatio * settings.textureSizeMultiplier);
-    
-    // Configurar sombras según calidad
-    renderer.shadowMap.enabled = settings.shadowMapEnabled;
-    if (settings.shadowMapEnabled) {
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // Configuración básica de Three.js con manejo de errores
+    try {
+        // Crear escena
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x88ccff);
+        
+        // Crear cámara con valores seguros
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 5, 10); // Posición inicial segura
+        
+        console.log('Escena y cámara creadas');
+        
+        // Crear renderer con opciones mínimas primero
+        renderer = new THREE.WebGLRenderer({ antialias: false });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        
+        console.log('Renderer creado');
+        
+        // Comprobar si el renderer se creó correctamente
+        if (!renderer.domElement) {
+            throw new Error('No se pudo crear el elemento DOM del renderer');
+        }
+        
+        // Limpiar y añadir al contenedor
+        const container = document.getElementById('game3d');
+        if (!container) {
+            throw new Error('No se encontró el contenedor game3d');
+        }
+        
+        while (container.firstChild) {
+            container.removeChild(container.firstChild);
+        }
+        container.appendChild(renderer.domElement);
+        
+        console.log('Renderer añadido al DOM');
+        
+        // Verificar que el renderer está funcionando correctamente
+        const testRender = renderer.render(scene, camera);
+        console.log('Test de renderizado completado');
+        
+        // Añadir luz básica para ver objetos
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+        
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        directionalLight.position.set(10, 10, 10);
+        scene.add(directionalLight);
+        
+        console.log('Luces añadidas');
+        
+        // Crear suelo básico
+        const floorGeometry = new THREE.PlaneGeometry(50, 50);
+        const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x666666 });
+        const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+        floor.rotation.x = -Math.PI / 2;
+        scene.add(floor);
+        
+        console.log('Suelo añadido');
+        
+        // Eventos del navegador básicos
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        console.log('Eventos registrados');
+        
+        // Iniciar bucle de renderizado básico
+        function animateBasic() {
+            requestAnimationFrame(animateBasic);
+            renderer.render(scene, camera);
+        }
+        
+        // Iniciar animación
+        console.log('Iniciando animación básica');
+        animateBasic();
+        
+        // Si todo funciona, cargar el resto del juego
+        console.log('Inicialización básica completada, cargando resto del juego...');
+        setTimeout(loadGameComponents, 1000);
+        
+    } catch (e) {
+        console.error('Error en init():', e);
+        showErrorMessage('Error al inicializar el juego 3D: ' + e.message);
     }
-    
-    // Resto del código de init...
+}
+
+// Función para cargar componentes del juego gradualmente
+function loadGameComponents() {
+    try {
+        console.log('Cargando componentes adicionales...');
+        
+        // Aquí puedes añadir el resto de la lógica del juego
+        // de forma progresiva para identificar qué parte causa problemas
+        
+        // Por ejemplo:
+        // 1. Cargar controles
+        setupControls();
+        console.log('Controles cargados');
+        
+        // 2. Cargar ambiente
+        try {
+            createEnvironment();
+            console.log('Ambiente cargado');
+        } catch (e) {
+            console.error('Error al cargar ambiente:', e);
+            // Continuar con un ambiente básico
+        }
+        
+        // 3. Configurar jugador
+        try {
+            connectToServer();
+            console.log('Conexión al servidor establecida');
+        } catch (e) {
+            console.error('Error al conectar con servidor:', e);
+            // Crear jugador local básico para pruebas
+            const startPosition = new THREE.Vector3(0, 1, 0);
+            createPlayer('player1', startPosition);
+            myId = 'player1';
+        }
+        
+        // Cambiar al bucle de animación completo
+        console.log('Cambiando a animación completa');
+        cancelAnimationFrame(animateId);
+        animate();
+        
+    } catch (e) {
+        console.error('Error al cargar componentes:', e);
+        showErrorMessage('Error al cargar componentes del juego: ' + e.message);
+    }
 }
 
 // Carga progresiva (para no bloquear el navegador)
@@ -2125,3 +2220,227 @@ function hideLoadingScreen() {
         }, 500);
     }
 }
+
+// Código de diagnóstico para detectar problemas
+
+// Comprobar soporte para WebGL
+function checkWebGLSupport() {
+    try {
+        const canvas = document.createElement('canvas');
+        return !!window.WebGLRenderingContext && 
+            (canvas.getContext('webgl') || canvas.getContext('experimental-webgl'));
+    } catch(e) {
+        return false;
+    }
+}
+
+// Manejador de errores para Three.js
+function initGameWithErrorHandling() {
+    // Comprobar WebGL primero
+    if (!checkWebGLSupport()) {
+        showErrorMessage('Tu navegador no soporta WebGL, que es necesario para ejecutar el juego 3D. Intenta con otro navegador como Chrome o Firefox.');
+        return;
+    }
+    
+    try {
+        // Intentar cargar Three.js
+        if (typeof THREE === 'undefined') {
+            throw new Error('No se pudo cargar la biblioteca Three.js');
+        }
+        
+        // Mostrar mensaje de carga
+        const loadingMessage = document.createElement('div');
+        loadingMessage.id = 'loadingMessage';
+        loadingMessage.style.position = 'absolute';
+        loadingMessage.style.top = '50%';
+        loadingMessage.style.left = '50%';
+        loadingMessage.style.transform = 'translate(-50%, -50%)';
+        loadingMessage.style.color = 'white';
+        loadingMessage.style.fontSize = '24px';
+        loadingMessage.style.textAlign = 'center';
+        loadingMessage.innerHTML = 'Cargando juego 3D...<br/><small>Si la pantalla permanece negra, revisa la consola para errores.</small>';
+        
+        const container = document.getElementById('game3d');
+        container.appendChild(loadingMessage);
+        
+        // Inicializar versión simplificada del juego
+        setTimeout(() => {
+            try {
+                initBasicGame();
+                if (loadingMessage.parentNode) {
+                    loadingMessage.parentNode.removeChild(loadingMessage);
+                }
+            } catch (e) {
+                console.error('Error al inicializar el juego básico:', e);
+                showErrorMessage('Error al inicializar: ' + e.message);
+            }
+        }, 500);
+        
+    } catch (e) {
+        console.error('Error durante la inicialización:', e);
+        showErrorMessage('Error al cargar el juego: ' + e.message);
+    }
+}
+
+function showErrorMessage(message) {
+    const errorMessage = document.createElement('div');
+    errorMessage.style.position = 'absolute';
+    errorMessage.style.top = '50%';
+    errorMessage.style.left = '50%';
+    errorMessage.style.transform = 'translate(-50%, -50%)';
+    errorMessage.style.background = 'rgba(0, 0, 0, 0.8)';
+    errorMessage.style.color = 'white';
+    errorMessage.style.padding = '20px';
+    errorMessage.style.borderRadius = '10px';
+    errorMessage.style.maxWidth = '80%';
+    errorMessage.style.textAlign = 'center';
+    errorMessage.innerHTML = `
+        <h3 style="color:#ff5555">Error en el juego 3D</h3>
+        <p>${message}</p>
+        <p>Puedes intentar:</p>
+        <ul style="text-align:left">
+            <li>Actualizar tu navegador</li>
+            <li>Activar aceleración por hardware en la configuración del navegador</li>
+            <li>Usar otro navegador como Chrome o Firefox</li>
+            <li>Probar en un dispositivo con mejor rendimiento gráfico</li>
+        </ul>
+        <button id="try2DMode" style="padding:10px 20px;background:#4CAF50;color:white;border:none;border-radius:5px;margin-top:15px;cursor:pointer">
+            Probar modo 2D
+        </button>
+    `;
+    
+    const container = document.getElementById('game3d');
+    container.appendChild(errorMessage);
+    
+    // Botón para cambiar a modo 2D
+    document.getElementById('try2DMode').addEventListener('click', () => {
+        const game3dContainer = document.getElementById('game3d');
+        const game2dContainer = document.getElementById('game2d');
+        
+        game3dContainer.style.display = 'none';
+        game2dContainer.style.display = 'block';
+        startGame(); // Iniciar juego 2D
+    });
+}
+
+// Versión simplificada del juego para diagnóstico
+function initBasicGame() {
+    // Crear escena básica
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x000000); // Fondo negro para diagnóstico
+    
+    // Cámara simple
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.z = 5;
+    
+    // Renderer con configuración mínima
+    renderer = new THREE.WebGLRenderer({ antialias: false });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    
+    // Limpiar contenedor
+    const container = document.getElementById('game3d');
+    while (container.firstChild) {
+        container.removeChild(container.firstChild);
+    }
+    container.appendChild(renderer.domElement);
+    
+    // Añadir un objeto simple para comprobar si el renderizado funciona
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 }); // Verde para mayor visibilidad
+    const cube = new THREE.Mesh(geometry, material);
+    scene.add(cube);
+    
+    // Añadir luz simple
+    const light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(0, 1, 1);
+    scene.add(light);
+    
+    // Texto de diagnóstico
+    const textDiv = document.createElement('div');
+    textDiv.style.position = 'absolute';
+    textDiv.style.top = '10px';
+    textDiv.style.left = '10px';
+    textDiv.style.color = 'white';
+    textDiv.style.background = 'rgba(0, 0, 0, 0.5)';
+    textDiv.style.padding = '10px';
+    textDiv.style.borderRadius = '5px';
+    textDiv.innerHTML = 'Modo de diagnóstico - Si ves este cubo verde, WebGL está funcionando';
+    container.appendChild(textDiv);
+    
+    // Animar el cubo para verificar que el bucle de renderizado funciona
+    function animate() {
+        requestAnimationFrame(animate);
+        
+        cube.rotation.x += 0.01;
+        cube.rotation.y += 0.01;
+        
+        renderer.render(scene, camera);
+    }
+    
+    animate();
+    
+    // Si todo funciona, intentar cargar el juego completo después de 3 segundos
+    setTimeout(() => {
+        try {
+            textDiv.innerHTML = 'Diagnóstico completado - Cargando juego completo...';
+            // Iniciar juego completo
+            init();
+        } catch(e) {
+            console.error('Error al cargar el juego completo:', e);
+            textDiv.innerHTML = 'Error al cargar el juego completo. Permaneciendo en modo diagnóstico.';
+        }
+    }, 3000);
+}
+
+// Reemplazar la inicialización normal con la versión segura
+window.addEventListener('load', () => {
+    try {
+        initGameWithErrorHandling();
+    } catch(e) {
+        console.error('Error crítico:', e);
+        alert('Error crítico al iniciar el juego: ' + e.message);
+    }
+});
+
+// Añadir botón flotante para alternar modos
+function addModeToggleButton() {
+    const toggleButton = document.createElement('button');
+    toggleButton.id = 'toggleGameMode';
+    toggleButton.style.position = 'absolute';
+    toggleButton.style.bottom = '20px';
+    toggleButton.style.left = '50%';
+    toggleButton.style.transform = 'translateX(-50%)';
+    toggleButton.style.padding = '8px 15px';
+    toggleButton.style.background = '#4CAF50';
+    toggleButton.style.color = 'white';
+    toggleButton.style.border = 'none';
+    toggleButton.style.borderRadius = '5px';
+    toggleButton.style.cursor = 'pointer';
+    toggleButton.style.zIndex = '1000';
+    toggleButton.innerHTML = 'Cambiar a modo 2D';
+    
+    toggleButton.addEventListener('click', () => {
+        const game3dContainer = document.getElementById('game3d');
+        const game2dContainer = document.getElementById('game2d');
+        
+        if (game3dContainer.style.display !== 'none') {
+            // Cambiar a 2D
+            game3dContainer.style.display = 'none';
+            game2dContainer.style.display = 'block';
+            startGame(); // Iniciar juego 2D
+            toggleButton.innerHTML = 'Cambiar a modo 3D';
+        } else {
+            // Cambiar a 3D
+            game2dContainer.style.display = 'none';
+            game3dContainer.style.display = 'block';
+            toggleButton.innerHTML = 'Cambiar a modo 2D';
+            // Reiniciar juego 3D
+            initGameWithErrorHandling();
+        }
+    });
+    
+    document.body.appendChild(toggleButton);
+}
+
+// Llamar a esta función al final de initGameWithErrorHandling
+addModeToggleButton();
