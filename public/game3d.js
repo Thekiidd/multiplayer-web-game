@@ -19,7 +19,7 @@ let cameraRotation = {
     y: 0
 };
 
-// Constantes del juego
+// Constantes del juego con opciones de calidad
 const GAME_CONSTANTS = {
     PLAYER_SPEED: 0.15,
     PLAYER_SIZE: 1,
@@ -31,37 +31,52 @@ const GAME_CONSTANTS = {
     MAX_HEALTH: 100,
     ARENA_SIZE: 50,
     WALL_HEIGHT: 5,
-    NUM_TREES: 20,
-    NUM_ROCKS: 15
+    NUM_TREES: 12,     // Reducido de 20
+    NUM_ROCKS: 8,      // Reducido de 15
+    // Nuevas constantes de calidad
+    SHADOW_MAP_SIZE: 1024,  // Reducido de 2048
+    MAX_BULLETS: 20,
+    VIEW_DISTANCE: 45,      // Distancia de niebla reducida
+    DRAW_DISTANCE: 60       // Distancia máxima de renderizado
 };
+
+// Variables para control de rendimiento
+let lastFrameTime = 0;
+let frameCount = 0;
+let fps = 0;
+let fpsUpdateTime = 0;
+let qualityLevel = 'medium'; // 'low', 'medium', 'high'
 
 function createTree(x, z) {
     const treeGroup = new THREE.Group();
 
+    // Reducir la complejidad del árbol en calidad baja
+    const segments = qualityLevel === 'low' ? 6 : 8;
+    
     // Tronco
-    const trunkGeometry = new THREE.CylinderGeometry(0.2, 0.3, 2, 8);
+    const trunkGeometry = new THREE.CylinderGeometry(0.2, 0.3, 2, segments);
     const trunkMaterial = new THREE.MeshStandardMaterial({ 
         color: 0x4d2926,
         roughness: 0.9 
     });
     const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
-    trunk.castShadow = true;
-    trunk.receiveShadow = true;
+    trunk.castShadow = qualityLevel !== 'low';
+    trunk.receiveShadow = qualityLevel !== 'low';
     treeGroup.add(trunk);
 
-    // Copa del árbol (varios niveles)
-    const levels = 3;
+    // Copa del árbol (varios niveles, menos en calidad baja)
+    const levels = qualityLevel === 'low' ? 2 : 3;
     for (let i = 0; i < levels; i++) {
         const size = 2 - (i * 0.4);
         const height = 1 + (i * 1.5);
-        const leavesGeometry = new THREE.ConeGeometry(size, 2, 8);
+        const leavesGeometry = new THREE.ConeGeometry(size, 2, segments);
         const leavesMaterial = new THREE.MeshStandardMaterial({ 
             color: 0x0d5c0d,
             roughness: 0.8
         });
         const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
         leaves.position.y = height;
-        leaves.castShadow = true;
+        leaves.castShadow = qualityLevel !== 'low';
         treeGroup.add(leaves);
     }
 
@@ -88,14 +103,31 @@ function createRock(x, z) {
 function init() {
     // Configuración básica de Three.js
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x88ccff); // Cielo azul claro
-    scene.fog = new THREE.Fog(0x88ccff, 20, 60); // Niebla para ambiente
+    scene.background = new THREE.Color(0x88ccff);
+    
+    // Ajustar la niebla para mejorar rendimiento
+    scene.fog = new THREE.Fog(0x88ccff, 10, GAME_CONSTANTS.VIEW_DISTANCE);
 
-    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    renderer = new THREE.WebGLRenderer({ antialias: true });
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, GAME_CONSTANTS.DRAW_DISTANCE);
+    
+    // Detectar la capacidad del dispositivo
+    detectDeviceCapabilities();
+    
+    // Configurar renderer con opciones optimizadas
+    renderer = new THREE.WebGLRenderer({ 
+        antialias: qualityLevel !== 'low',
+        powerPreference: 'high-performance'
+    });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.setPixelRatio(window.devicePixelRatio > 1 ? (qualityLevel === 'high' ? window.devicePixelRatio : 1) : 1);
+    
+    // Configurar sombras según la calidad
+    if (qualityLevel === 'low') {
+        renderer.shadowMap.enabled = false;
+    } else {
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = qualityLevel === 'high' ? THREE.PCFSoftShadowMap : THREE.BasicShadowMap;
+    }
     
     // Limpiar el contenedor 3D si ya tiene contenido
     const container = document.getElementById('game3d');
@@ -103,6 +135,9 @@ function init() {
         container.removeChild(container.firstChild);
     }
     container.appendChild(renderer.domElement);
+
+    // Configurar el crosshair personalizado para modo 3D
+    setupCrosshair();
 
     // Configuración de la iluminación
     setupLighting();
@@ -136,42 +171,89 @@ function init() {
         renderer.domElement.requestPointerLock();
     });
 
+    // Añadir monitor de FPS si estamos en modo desarrollador
+    if (developerMode) {
+        setupFPSMonitor();
+    }
+
     // Iniciar el bucle de renderizado
     animate();
 }
 
+function setupCrosshair() {
+    // Ocultar el crosshair 2D si existe
+    const oldCrosshair = document.getElementById('crosshair');
+    if (oldCrosshair) {
+        oldCrosshair.style.display = 'none';
+    }
+    
+    // Crear un nuevo crosshair para el modo 3D
+    const crosshair = document.createElement('div');
+    crosshair.id = 'crosshair3d';
+    crosshair.style.position = 'fixed';
+    crosshair.style.top = '50%';
+    crosshair.style.left = '50%';
+    crosshair.style.transform = 'translate(-50%, -50%)';
+    crosshair.style.width = '20px';
+    crosshair.style.height = '20px';
+    crosshair.style.pointerEvents = 'none';
+    crosshair.style.zIndex = '1000';
+    
+    // Hacer un crosshair más moderno con CSS
+    crosshair.innerHTML = `
+        <div style="position:absolute; width:16px; height:2px; background:rgba(0,255,0,0.7); top:9px; left:2px;"></div>
+        <div style="position:absolute; width:2px; height:16px; background:rgba(0,255,0,0.7); top:2px; left:9px;"></div>
+        <div style="position:absolute; width:6px; height:6px; border:1px solid rgba(0,255,0,0.7); border-radius:50%; top:6px; left:6px;"></div>
+    `;
+    
+    document.body.appendChild(crosshair);
+}
+
 function setupLighting() {
     // Luz ambiental
-    const ambientLight = new THREE.AmbientLight(0x6688cc, 0.5);
+    const ambientLight = new THREE.AmbientLight(0x6688cc, 0.6); // Aumentada para reducir dependencia de sombras
     scene.add(ambientLight);
 
     // Luz direccional principal (sol)
     const sunLight = new THREE.DirectionalLight(0xffffbb, 1.2);
     sunLight.position.set(50, 50, 50);
-    sunLight.castShadow = true;
     
-    // Configuración de sombras de alta calidad
-    sunLight.shadow.mapSize.width = 2048;
-    sunLight.shadow.mapSize.height = 2048;
-    sunLight.shadow.camera.near = 0.5;
-    sunLight.shadow.camera.far = 150;
-    sunLight.shadow.camera.left = -50;
-    sunLight.shadow.camera.right = 50;
-    sunLight.shadow.camera.top = 50;
-    sunLight.shadow.camera.bottom = -50;
+    // Configurar sombras según nivel de calidad
+    if (qualityLevel !== 'low') {
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = GAME_CONSTANTS.SHADOW_MAP_SIZE;
+        sunLight.shadow.mapSize.height = GAME_CONSTANTS.SHADOW_MAP_SIZE;
+        
+        // Optimizar frustum de cámara de sombras
+        const d = 30; // Reducido para optimizar
+        sunLight.shadow.camera.left = -d;
+        sunLight.shadow.camera.right = d;
+        sunLight.shadow.camera.top = d;
+        sunLight.shadow.camera.bottom = -d;
+        sunLight.shadow.camera.near = 10;
+        sunLight.shadow.camera.far = 80;
+    }
     
     scene.add(sunLight);
 
-    // Luz de relleno suave
-    const fillLight = new THREE.DirectionalLight(0x8888ff, 0.3);
-    fillLight.position.set(-50, 30, -50);
-    scene.add(fillLight);
+    // Luz de relleno suave (solo en calidad media y alta)
+    if (qualityLevel !== 'low') {
+        const fillLight = new THREE.DirectionalLight(0x8888ff, 0.3);
+        fillLight.position.set(-50, 30, -50);
+        scene.add(fillLight);
+    }
 }
 
 function createEnvironment() {
     // Crear suelo con textura de hierba
     const textureLoader = new THREE.TextureLoader();
-    const grassTexture = textureLoader.load('https://threejs.org/examples/textures/terrain/grasslight-big.jpg');
+    
+    // Cargar textura de menor resolución en calidad baja
+    const grassTexturePath = qualityLevel === 'low' ? 
+        'https://threejs.org/examples/textures/terrain/grasslight-small.jpg' : 
+        'https://threejs.org/examples/textures/terrain/grasslight-big.jpg';
+    
+    const grassTexture = textureLoader.load(grassTexturePath);
     grassTexture.wrapS = THREE.RepeatWrapping;
     grassTexture.wrapT = THREE.RepeatWrapping;
     grassTexture.repeat.set(8, 8);
@@ -184,7 +266,7 @@ function createEnvironment() {
     });
     const floor = new THREE.Mesh(floorGeometry, floorMaterial);
     floor.rotation.x = -Math.PI / 2;
-    floor.receiveShadow = true;
+    floor.receiveShadow = qualityLevel !== 'low';
     scene.add(floor);
 
     // Crear paredes con efecto de cristal futurista
@@ -211,8 +293,12 @@ function createEnvironment() {
         scene.add(wall);
     }
 
+    // Reducir complejidad en modo de baja calidad
+    const treeCount = qualityLevel === 'low' ? GAME_CONSTANTS.NUM_TREES / 2 : GAME_CONSTANTS.NUM_TREES;
+    const rockCount = qualityLevel === 'low' ? GAME_CONSTANTS.NUM_ROCKS / 2 : GAME_CONSTANTS.NUM_ROCKS;
+    
     // Añadir árboles aleatorios
-    for (let i = 0; i < GAME_CONSTANTS.NUM_TREES; i++) {
+    for (let i = 0; i < treeCount; i++) {
         const x = (Math.random() - 0.5) * (GAME_CONSTANTS.ARENA_SIZE - 5);
         const z = (Math.random() - 0.5) * (GAME_CONSTANTS.ARENA_SIZE - 5);
         const tree = createTree(x, z);
@@ -220,7 +306,7 @@ function createEnvironment() {
     }
 
     // Añadir rocas aleatorias
-    for (let i = 0; i < GAME_CONSTANTS.NUM_ROCKS; i++) {
+    for (let i = 0; i < rockCount; i++) {
         const x = (Math.random() - 0.5) * (GAME_CONSTANTS.ARENA_SIZE - 3);
         const z = (Math.random() - 0.5) * (GAME_CONSTANTS.ARENA_SIZE - 3);
         const rock = createRock(x, z);
@@ -506,8 +592,27 @@ function updatePlayerPosition() {
 }
 
 function updateBullets() {
-    for (let bullet of bullets) {
-        bullet.position.add(bullet.direction.multiplyScalar(GAME_CONSTANTS.BULLET_SPEED));
+    // Limitar el número máximo de balas para mejorar rendimiento
+    if (bullets.length > GAME_CONSTANTS.MAX_BULLETS) {
+        const excessBullets = bullets.length - GAME_CONSTANTS.MAX_BULLETS;
+        for (let i = 0; i < excessBullets; i++) {
+            scene.remove(bullets[i]);
+        }
+        bullets = bullets.slice(excessBullets);
+    }
+    
+    for (let i = 0; i < bullets.length; i++) {
+        const bullet = bullets[i];
+        bullet.position.add(bullet.direction.clone().multiplyScalar(GAME_CONSTANTS.BULLET_SPEED));
+        
+        // Optimización: comprobar primero límites de la arena (es más barato)
+        if (Math.abs(bullet.position.x) > GAME_CONSTANTS.ARENA_SIZE / 2 ||
+            Math.abs(bullet.position.z) > GAME_CONSTANTS.ARENA_SIZE / 2) {
+            scene.remove(bullet);
+            bullets.splice(i, 1);
+            i--;
+            continue;
+        }
         
         // Comprobar colisiones con jugadores
         for (let id in players) {
@@ -517,18 +622,12 @@ function updateBullets() {
                 
                 if (distance < GAME_CONSTANTS.PLAYER_SIZE) {
                     scene.remove(bullet);
-                    bullets = bullets.filter(b => b !== bullet);
+                    bullets.splice(i, 1);
+                    i--;
                     socket.emit('bulletHit', { playerId: id });
                     break;
                 }
             }
-        }
-        
-        // Comprobar colisiones con los límites de la arena
-        if (Math.abs(bullet.position.x) > GAME_CONSTANTS.ARENA_SIZE / 2 ||
-            Math.abs(bullet.position.z) > GAME_CONSTANTS.ARENA_SIZE / 2) {
-            scene.remove(bullet);
-            bullets = bullets.filter(b => b !== bullet);
         }
     }
 }
@@ -547,52 +646,207 @@ function connectToServer() {
     createPlayer(myId, startPosition);
 }
 
-function animate() {
+function animate(time) {
     requestAnimationFrame(animate);
+    
+    // Calcular FPS
+    if (!lastFrameTime) {
+        lastFrameTime = time;
+        fpsUpdateTime = time;
+    }
+    
+    const delta = time - lastFrameTime;
+    lastFrameTime = time;
+    
+    frameCount++;
+    
+    // Actualizar contador FPS cada 500ms
+    if (time - fpsUpdateTime > 500) {
+        fps = Math.round((frameCount * 1000) / (time - fpsUpdateTime));
+        
+        const fpsCounter = document.getElementById('fpsCounter');
+        if (fpsCounter) {
+            fpsCounter.textContent = `FPS: ${fps} (${qualityLevel})`;
+        }
+        
+        frameCount = 0;
+        fpsUpdateTime = time;
+        
+        // Ajuste automático de calidad (opcional)
+        if (fps < 30 && qualityLevel !== 'low') {
+            console.log('Rendimiento bajo detectado, ajustando calidad...');
+            // Aquí podrías reducir la calidad automáticamente
+        }
+    }
     
     if (players[myId]) {
         const player = players[myId].mesh;
         const moveSpeed = controls.run ? GAME_CONSTANTS.PLAYER_SPEED * 2 : GAME_CONSTANTS.PLAYER_SPEED;
         
-        // Vector de movimiento basado en la dirección de la cámara
-        const moveVector = new THREE.Vector3();
-        
-        if (controls.moveForward) moveVector.z -= 1;
-        if (controls.moveBackward) moveVector.z += 1;
-        if (controls.moveLeft) moveVector.x -= 1;
-        if (controls.moveRight) moveVector.x += 1;
-        
-        // Normalizar el vector si hay movimiento diagonal
-        if (moveVector.length() > 0) {
-            moveVector.normalize();
-            moveVector.multiplyScalar(moveSpeed);
-            
-            // Rotar el vector de movimiento según la rotación de la cámara
-            const rotationMatrix = new THREE.Matrix4();
-            rotationMatrix.makeRotationY(cameraRotation.y);
-            moveVector.applyMatrix4(rotationMatrix);
-            
-            // Aplicar movimiento
-            player.position.x += moveVector.x;
-            player.position.z += moveVector.z;
-            
-            // Limitar posición dentro de la arena
-            player.position.x = Math.max(-GAME_CONSTANTS.ARENA_SIZE/2 + 2, Math.min(GAME_CONSTANTS.ARENA_SIZE/2 - 2, player.position.x));
-            player.position.z = Math.max(-GAME_CONSTANTS.ARENA_SIZE/2 + 2, Math.min(GAME_CONSTANTS.ARENA_SIZE/2 - 2, player.position.z));
-        }
-        
-        // Actualizar posición de la cámara para seguir al jugador en primera persona
-        camera.position.x = player.position.x;
-        camera.position.z = player.position.z;
-        camera.position.y = player.position.y + 1.6; // Altura de los ojos
-        
-        // Ya no necesitamos usar camera.lookAt porque la dirección se controla con la rotación
-        // establecida en la función onMouseMove
+        // Optimizar movimiento
+        movePlayer(player, moveSpeed);
     }
     
     updateBullets();
     renderer.render(scene, camera);
 }
 
+// Función separada para movimiento (optimización)
+function movePlayer(player, moveSpeed) {
+    // Vector de movimiento basado en la dirección de la cámara
+    const moveVector = new THREE.Vector3();
+    
+    if (controls.moveForward) moveVector.z -= 1;
+    if (controls.moveBackward) moveVector.z += 1;
+    if (controls.moveLeft) moveVector.x -= 1;
+    if (controls.moveRight) moveVector.x += 1;
+    
+    // Evitar cálculos innecesarios si no hay movimiento
+    if (moveVector.length() > 0) {
+        moveVector.normalize();
+        moveVector.multiplyScalar(moveSpeed);
+        
+        // Rotar el vector de movimiento según la rotación de la cámara
+        const rotationMatrix = new THREE.Matrix4();
+        rotationMatrix.makeRotationY(cameraRotation.y);
+        moveVector.applyMatrix4(rotationMatrix);
+        
+        // Aplicar movimiento
+        player.position.x += moveVector.x;
+        player.position.z += moveVector.z;
+        
+        // Limitar posición dentro de la arena
+        player.position.x = Math.max(-GAME_CONSTANTS.ARENA_SIZE/2 + 2, Math.min(GAME_CONSTANTS.ARENA_SIZE/2 - 2, player.position.x));
+        player.position.z = Math.max(-GAME_CONSTANTS.ARENA_SIZE/2 + 2, Math.min(GAME_CONSTANTS.ARENA_SIZE/2 - 2, player.position.z));
+    }
+    
+    // Actualizar posición de la cámara para seguir al jugador en primera persona
+    camera.position.x = player.position.x;
+    camera.position.z = player.position.z;
+    camera.position.y = player.position.y + 1.6; // Altura de los ojos
+}
+
+// Añadir monitor de FPS para desarrolladores
+function setupFPSMonitor() {
+    const fpsCounter = document.createElement('div');
+    fpsCounter.id = 'fpsCounter';
+    fpsCounter.style.position = 'fixed';
+    fpsCounter.style.top = '10px';
+    fpsCounter.style.right = '10px';
+    fpsCounter.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+    fpsCounter.style.color = '#00ff00';
+    fpsCounter.style.padding = '5px 10px';
+    fpsCounter.style.borderRadius = '5px';
+    fpsCounter.style.fontFamily = 'monospace';
+    fpsCounter.style.zIndex = '2000';
+    fpsCounter.textContent = 'FPS: --';
+    
+    // Añadir botones para cambiar calidad
+    const qualityControls = document.createElement('div');
+    qualityControls.style.marginTop = '5px';
+    qualityControls.innerHTML = `
+        <button id="lowQuality" style="margin-right:5px;padding:2px 5px;background:${qualityLevel === 'low' ? '#00ff00' : '#444'};color:white;border:none;">Bajo</button>
+        <button id="medQuality" style="margin-right:5px;padding:2px 5px;background:${qualityLevel === 'medium' ? '#00ff00' : '#444'};color:white;border:none;">Medio</button>
+        <button id="highQuality" style="padding:2px 5px;background:${qualityLevel === 'high' ? '#00ff00' : '#444'};color:white;border:none;">Alto</button>
+    `;
+    
+    fpsCounter.appendChild(qualityControls);
+    document.body.appendChild(fpsCounter);
+    
+    // Eventos para cambiar calidad
+    document.getElementById('lowQuality').addEventListener('click', () => {
+        window.location.href = window.location.pathname + '?quality=low';
+    });
+    
+    document.getElementById('medQuality').addEventListener('click', () => {
+        window.location.href = window.location.pathname + '?quality=medium';
+    });
+    
+    document.getElementById('highQuality').addEventListener('click', () => {
+        window.location.href = window.location.pathname + '?quality=high';
+    });
+}
+
+// Añadir función para limpiar cuando se cierra el juego 3D
+function cleanupGame3D() {
+    // Eliminar el crosshair 3D
+    const crosshair3d = document.getElementById('crosshair3d');
+    if (crosshair3d) {
+        document.body.removeChild(crosshair3d);
+    }
+    
+    // Restaurar el crosshair original
+    const oldCrosshair = document.getElementById('crosshair');
+    if (oldCrosshair) {
+        oldCrosshair.style.display = '';
+    }
+    
+    // Liberar recursos
+    if (renderer) {
+        renderer.dispose();
+    }
+    
+    // Limpiar la escena
+    if (scene) {
+        scene.clear();
+    }
+    
+    // Desregistrar eventos
+    window.removeEventListener('resize', onWindowResize);
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('click', onMouseClick);
+    document.removeEventListener('keydown', onKeyDown);
+    document.removeEventListener('keyup', onKeyUp);
+}
+
 // Iniciar el juego cuando se cargue la página
-window.addEventListener('load', init); 
+window.addEventListener('load', init);
+
+function detectDeviceCapabilities() {
+    // Estimar la capacidad del dispositivo basado en cores de CPU y GPU
+    const hardwareConcurrency = navigator.hardwareConcurrency || 4;
+    
+    // Comprobación rápida de rendimiento WebGL
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    
+    if (!gl) {
+        // WebGL no soportado, usar calidad baja
+        qualityLevel = 'low';
+        return;
+    }
+    
+    // Comprobar extensiones disponibles
+    const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+    let renderer = 'unknown';
+    
+    if (debugInfo) {
+        renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+    }
+    
+    // Ajustar calidad según hardware detectado
+    if (hardwareConcurrency <= 2 || 
+        renderer.toLowerCase().includes('intel') ||
+        renderer.toLowerCase().includes('mesa') ||
+        /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+        qualityLevel = 'low';
+    } else if (hardwareConcurrency <= 4 || 
+               !renderer.toLowerCase().includes('nvidia') && 
+               !renderer.toLowerCase().includes('amd') && 
+               !renderer.toLowerCase().includes('radeon')) {
+        qualityLevel = 'medium';
+    } else {
+        qualityLevel = 'high';
+    }
+    
+    // Permitir forzar calidad a través de URL
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('quality')) {
+        const paramQuality = urlParams.get('quality');
+        if (['low', 'medium', 'high'].includes(paramQuality)) {
+            qualityLevel = paramQuality;
+        }
+    }
+    
+    console.log(`Calidad gráfica ajustada a: ${qualityLevel}`);
+} 
