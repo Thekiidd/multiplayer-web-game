@@ -94,16 +94,118 @@
         const game2dContainer = document.getElementById('game2d');
         const game3dContainer = document.getElementById('game3d');
         
-        versionButtons.forEach(button => {
-            button.addEventListener('click', () => {
-                versionButtons.forEach(btn => btn.classList.remove('selected'));
-                button.classList.add('selected');
-                selectedVersion = button.dataset.version;
-            });
+        // Código para modo desarrollador
+        const DEVELOPER_KEY = "neoarena2024"; // Clave secreta para desarrolladores
+        let konamiCode = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'b', 'a'];
+        let konamiIndex = 0;
+        let developerMode = false;
+        
+        // Verificar si ya hay una sesión de desarrollador guardada
+        if (localStorage.getItem('devSession') === 'active') {
+            enableDeveloperMode();
+        }
+        
+        // Detectar código Konami para mostrar la pantalla de acceso
+        document.addEventListener('keydown', (e) => {
+            if (e.key === konamiCode[konamiIndex]) {
+                konamiIndex++;
+                if (konamiIndex === konamiCode.length) {
+                    showDeveloperLogin();
+                    konamiIndex = 0;
+                }
+            } else {
+                konamiIndex = 0;
+            }
         });
-
+        
+        function showDeveloperLogin() {
+            // Crear modal de login para desarrolladores
+            const modal = document.createElement('div');
+            modal.style.position = 'fixed';
+            modal.style.top = '50%';
+            modal.style.left = '50%';
+            modal.style.transform = 'translate(-50%, -50%)';
+            modal.style.background = 'rgba(20, 20, 30, 0.95)';
+            modal.style.padding = '20px';
+            modal.style.borderRadius = '10px';
+            modal.style.zIndex = '2000';
+            modal.style.boxShadow = '0 0 20px rgba(0, 255, 0, 0.5)';
+            modal.style.border = '1px solid rgba(0, 255, 0, 0.5)';
+            
+            modal.innerHTML = `
+                <h3 style="color:#4CAF50;margin-bottom:15px;">Acceso desarrollador</h3>
+                <input type="password" id="devPassword" placeholder="Contraseña" style="padding:8px;margin-bottom:15px;width:100%;background:rgba(30,30,40,0.9);color:white;border:1px solid rgba(0,255,0,0.3);border-radius:5px;">
+                <div style="display:flex;justify-content:space-between;">
+                    <button id="cancelDevLogin" style="padding:8px 15px;background:#444;color:white;border:none;border-radius:5px;cursor:pointer;">Cancelar</button>
+                    <button id="submitDevLogin" style="padding:8px 15px;background:#4CAF50;color:white;border:none;border-radius:5px;cursor:pointer;">Acceder</button>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            document.getElementById('devPassword').focus();
+            
+            document.getElementById('cancelDevLogin').addEventListener('click', () => {
+                document.body.removeChild(modal);
+            });
+            
+            document.getElementById('submitDevLogin').addEventListener('click', () => {
+                const password = document.getElementById('devPassword').value;
+                if (password === DEVELOPER_KEY) {
+                    enableDeveloperMode();
+                    localStorage.setItem('devSession', 'active');
+                    document.body.removeChild(modal);
+                } else {
+                    alert('Contraseña incorrecta');
+                }
+            });
+            
+            document.getElementById('devPassword').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    document.getElementById('submitDevLogin').click();
+                } else if (e.key === 'Escape') {
+                    document.getElementById('cancelDevLogin').click();
+                }
+            });
+        }
+        
+        function enableDeveloperMode() {
+            developerMode = true;
+            
+            // Habilitar el botón de jugar
+            const playButton = document.getElementById('botonJugar');
+            playButton.disabled = false;
+            playButton.textContent = "Jugar (Modo Desarrollador)";
+            playButton.style.background = "linear-gradient(135deg, #ff5500, #ff0000)";
+            
+            // Añadir selector de versión
+            const menuContent = document.querySelector('.menu-contenido');
+            const versionSelector = document.createElement('div');
+            versionSelector.className = 'version-selector';
+            versionSelector.innerHTML = `
+                <label>Seleccionar versión:</label>
+                <div class="version-buttons">
+                    <button class="version-button selected" data-version="2d">2D</button>
+                    <button class="version-button" data-version="3d">3D</button>
+                </div>
+            `;
+            
+            menuContent.insertBefore(versionSelector, playButton);
+            
+            // Configurar los botones de versión
+            document.querySelectorAll('.version-button').forEach(button => {
+                button.addEventListener('click', () => {
+                    document.querySelectorAll('.version-button').forEach(btn => btn.classList.remove('selected'));
+                    button.classList.add('selected');
+                    selectedVersion = button.dataset.version;
+                });
+            });
+        }
+        
         // Modificar el evento de inicio del juego
         document.getElementById('botonJugar').addEventListener('click', () => {
+            if (!developerMode) return; // Solo permitir si el modo desarrollador está activo
+            
             const menuInicial = document.getElementById('menuInicial');
             menuInicial.style.display = 'none';
 
@@ -119,5 +221,4 @@
         });
     </script>
 </body>
-</html> 
 </html> 
