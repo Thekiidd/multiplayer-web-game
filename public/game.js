@@ -11,6 +11,36 @@ document.addEventListener('DOMContentLoaded', () => {
     const ctx = canvas.getContext('2d');
     const scoreList = document.getElementById('scoreList');
 
+    // Prevenir comportamientos por defecto del navegador
+    document.addEventListener('contextmenu', (e) => e.preventDefault());
+    
+    // Prevenir scroll y otros comportamientos al presionar teclas
+    const keysToPrevent = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'w', 'a', 's', 'd'];
+    document.addEventListener('keydown', (e) => {
+        if (keysToPrevent.includes(e.key.toLowerCase()) && gameContainer.style.display !== 'none') {
+            e.preventDefault();
+        }
+    });
+
+    // Mantener el foco en el juego
+    gameContainer.addEventListener('click', () => {
+        gameContainer.focus();
+    });
+
+    // Prevenir arrastre de imágenes
+    document.addEventListener('dragstart', (e) => {
+        if (gameContainer.style.display !== 'none') {
+            e.preventDefault();
+        }
+    });
+
+    // Prevenir selección de texto
+    document.addEventListener('selectstart', (e) => {
+        if (gameContainer.style.display !== 'none') {
+            e.preventDefault();
+        }
+    });
+
     // Variables globales
     let socket;
     const players = new Map();
@@ -868,9 +898,61 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('playerAvatar').addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (file) {
+            // Verificar el tipo de archivo
+            if (!file.type.startsWith('image/')) {
+                alert('Por favor, selecciona solo archivos de imagen.');
+                return;
+            }
+
+            // Verificar el tamaño (máximo 2MB)
+            if (file.size > 2 * 1024 * 1024) {
+                alert('La imagen es demasiado grande. El tamaño máximo es 2MB.');
+                return;
+            }
+
             const reader = new FileReader();
             reader.onload = function(e) {
-                document.getElementById('avatarPreview').src = e.target.result;
+                // Si es un GIF, usarlo directamente
+                if (file.type === 'image/gif') {
+                    document.getElementById('avatarPreview').src = e.target.result;
+                    return;
+                }
+
+                // Para otros tipos de imagen, optimizar
+                const img = new Image();
+                img.onload = function() {
+                    // Crear un canvas para redimensionar
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    
+                    // Establecer dimensiones máximas
+                    const MAX_SIZE = 100;
+                    let width = img.width;
+                    let height = img.height;
+                    
+                    // Calcular nuevas dimensiones manteniendo proporción
+                    if (width > height) {
+                        if (width > MAX_SIZE) {
+                            height *= MAX_SIZE / width;
+                            width = MAX_SIZE;
+                        }
+                    } else {
+                        if (height > MAX_SIZE) {
+                            width *= MAX_SIZE / height;
+                            height = MAX_SIZE;
+                        }
+                    }
+                    
+                    // Configurar canvas y dibujar imagen redimensionada
+                    canvas.width = width;
+                    canvas.height = height;
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    // Convertir a JPEG con calidad reducida
+                    const optimizedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                    document.getElementById('avatarPreview').src = optimizedDataUrl;
+                };
+                img.src = e.target.result;
             };
             reader.readAsDataURL(file);
         }

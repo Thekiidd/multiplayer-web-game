@@ -16,12 +16,20 @@ body {
     left: 0;
     width: 100vw;
     height: 100vh;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    touch-action: none;
+    outline: none;
 }
 
 #gameCanvas {
     width: 100%;
     height: 100%;
     background-color: #2a2a2a;
+    touch-action: none;
+    cursor: crosshair;
 }
 
 #gameStatus {
@@ -293,12 +301,17 @@ body {
     border-radius: 5px;
     border: 1px solid rgba(255, 255, 255, 0.2);
     color: white;
+    pointer-events: auto;
 }
 
 #avatarPreview {
     border: 3px solid rgba(255, 255, 255, 0.3);
     border-radius: 50%;
     background: rgba(0, 0, 0, 0.2);
+    pointer-events: none;
+    max-width: 100px;
+    max-height: 100px;
+    object-fit: cover;
 }
 
 .kill-streak-message {
@@ -321,4 +334,15 @@ body {
     20% { transform: translate(-50%, -50%) scale(1); }
     80% { opacity: 1; }
     100% { opacity: 0; }
+}
+
+/* Prevenir interacciones con imágenes */
+img {
+    pointer-events: none;
+    user-drag: none;
+    -webkit-user-drag: none;
+    user-select: none;
+    -moz-user-select: none;
+    -webkit-user-select: none;
+    -ms-user-select: none;
 } 
