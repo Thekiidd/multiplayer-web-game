@@ -562,653 +562,88 @@ function setupControls() {
     controls.sprintStaminaCost = 1;
 }
 
+// Modificar la función createTree para usar menos polígonos en calidades bajas
 function createTree(x, z) {
     const treeGroup = new THREE.Group();
-
-    // Reducir la complejidad del árbol en calidad baja
-    const segments = qualityLevel === 'low' ? 6 : 8;
+    const settings = qualityManager.settings[qualityManager.currentQuality];
     
-    // Tronco
-    const trunkGeometry = new THREE.CylinderGeometry(0.2, 0.3, 2, segments);
+    // Determinar nivel de detalle basado en calidad
+    const segmentsBase = Math.max(4, Math.floor(8 * settings.objectDetail));
+    const levelCount = qualityManager.currentQuality === 'low' ? 2 : 3;
+    
+    // Tronco simplificado
+    const trunkGeometry = new THREE.CylinderGeometry(0.2, 0.3, 2, segmentsBase);
     const trunkMaterial = new THREE.MeshStandardMaterial({ 
         color: 0x4d2926,
         roughness: 0.9 
     });
     const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
-    trunk.castShadow = qualityLevel !== 'low';
-    trunk.receiveShadow = qualityLevel !== 'low';
+    trunk.castShadow = settings.shadowMapEnabled;
+    trunk.receiveShadow = settings.shadowMapEnabled;
     treeGroup.add(trunk);
-
-    // Copa del árbol (varios niveles, menos en calidad baja)
-    const levels = qualityLevel === 'low' ? 2 : 3;
-    for (let i = 0; i < levels; i++) {
+    
+    // Copa del árbol más simple
+    for (let i = 0; i < levelCount; i++) {
         const size = 2 - (i * 0.4);
         const height = 1 + (i * 1.5);
-        const leavesGeometry = new THREE.ConeGeometry(size, 2, segments);
+        const leavesGeometry = new THREE.ConeGeometry(size, 2, segmentsBase);
         const leavesMaterial = new THREE.MeshStandardMaterial({ 
             color: 0x0d5c0d,
             roughness: 0.8
         });
         const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
         leaves.position.y = height;
-        leaves.castShadow = qualityLevel !== 'low';
+        leaves.castShadow = settings.shadowMapEnabled;
         treeGroup.add(leaves);
     }
-
+    
     treeGroup.position.set(x, 0, z);
     return treeGroup;
 }
 
-function createRock(x, z) {
-    const rockGeometry = new THREE.DodecahedronGeometry(Math.random() * 0.5 + 0.5);
-    const rockMaterial = new THREE.MeshStandardMaterial({ 
+// Reemplazar geometrías complejas con versiones Low-Poly
+function createOptimizedRock(x, z) {
+    const settings = qualityManager.settings[qualityManager.currentQuality];
+    const detail = qualityManager.currentQuality === 'low' ? 0 : 1;
+    
+    // Usar geometría más simple para rocas
+    const rockGeometry = new THREE.IcosahedronGeometry(Math.random() * 0.5 + 0.5, detail);
+    
+    // Material simplificado
+    const rockMaterial = new THREE.MeshLambertMaterial({ 
         color: 0x666666,
-        roughness: 0.9,
-        metalness: 0.1
     });
+    
+    // En calidad alta, usar material más complejo
+    if (qualityManager.currentQuality === 'high') {
+        rockMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x666666,
+            roughness: 0.9,
+            metalness: 0.1
+        });
+    }
+    
     const rock = new THREE.Mesh(rockGeometry, rockMaterial);
     rock.position.set(x, 0.5, z);
     rock.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
-    rock.castShadow = true;
-    rock.receiveShadow = true;
+    rock.castShadow = settings.shadowMapEnabled;
+    rock.receiveShadow = settings.shadowMapEnabled;
+    
     return rock;
 }
 
-// Inicialización del juego
-function init() {
-    // Configuración básica de Three.js
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x88ccff);
+// Función para crear texturas más pequeñas
+function createOptimizedTexture(url) {
+    const settings = qualityManager.settings[qualityManager.currentQuality];
+    const texture = new THREE.TextureLoader().load(url);
     
-    // Ajustar la niebla para mejorar rendimiento
-    scene.fog = new THREE.Fog(0x88ccff, 10, GAME_CONSTANTS.VIEW_DISTANCE);
-
-    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, GAME_CONSTANTS.DRAW_DISTANCE);
-    
-    // Detectar la capacidad del dispositivo
-    detectDeviceCapabilities();
-    
-    // Configurar renderer con opciones optimizadas
-    renderer = new THREE.WebGLRenderer({ 
-        antialias: qualityLevel !== 'low',
-        powerPreference: 'high-performance'
-    });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(window.devicePixelRatio > 1 ? (qualityLevel === 'high' ? window.devicePixelRatio : 1) : 1);
-    
-    // Configurar sombras según la calidad
-    if (qualityLevel === 'low') {
-        renderer.shadowMap.enabled = false;
-    } else {
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = qualityLevel === 'high' ? THREE.PCFSoftShadowMap : THREE.BasicShadowMap;
+    // Reducir resolución en calidades bajas
+    if (settings.textureSizeMultiplier < 1.0) {
+        texture.minFilter = THREE.LinearFilter;
+        texture.generateMipmaps = false;
     }
     
-    // Limpiar el contenedor 3D si ya tiene contenido
-    const container = document.getElementById('game3d');
-    while (container.firstChild) {
-        container.removeChild(container.firstChild);
-    }
-    container.appendChild(renderer.domElement);
-
-    // Configurar el crosshair personalizado para modo 3D
-    setupCrosshair();
-
-    // Configuración de la iluminación
-    setupLighting();
-
-    // Configuración del ambiente
-    createEnvironment();
-
-    // Configuración de controles
-    setupControls();
-
-    // Configuración del raycaster para detección de colisiones
-    raycaster = new THREE.Raycaster();
-    mouse = new THREE.Vector2();
-
-    // Eventos del navegador
-    window.addEventListener('resize', onWindowResize, false);
-    document.addEventListener('mousemove', onMouseMove, false);
-    document.addEventListener('click', onMouseClick, false);
-    document.addEventListener('keydown', onKeyDown, false);
-    document.addEventListener('keyup', onKeyUp, false);
-
-    // Iniciar la conexión con el servidor
-    connectToServer();
-
-    // Posicionar la cámara inicialmente (posición neutral hasta que el jugador se cree)
-    camera.position.set(0, 1.6, 0); // Altura aproximada de los ojos
-    camera.lookAt(0, 1.6, -1); // Mirar hacia adelante
-
-    // Bloquear el puntero del ratón para el control de la cámara
-    renderer.domElement.addEventListener('click', () => {
-        renderer.domElement.requestPointerLock();
-    });
-
-    // Añadir monitor de FPS si estamos en modo desarrollador
-    if (developerMode) {
-        setupFPSMonitor();
-    }
-
-    // Iniciar el bucle de renderizado
-    animate();
-}
-
-function setupCrosshair() {
-    // Ocultar el crosshair 2D si existe
-    const oldCrosshair = document.getElementById('crosshair');
-    if (oldCrosshair) {
-        oldCrosshair.style.display = 'none';
-    }
-    
-    // Crear un nuevo crosshair para el modo 3D
-    const crosshair = document.createElement('div');
-    crosshair.id = 'crosshair3d';
-    crosshair.style.position = 'fixed';
-    crosshair.style.top = '50%';
-    crosshair.style.left = '50%';
-    crosshair.style.transform = 'translate(-50%, -50%)';
-    crosshair.style.width = '20px';
-    crosshair.style.height = '20px';
-    crosshair.style.pointerEvents = 'none';
-    crosshair.style.zIndex = '1000';
-    
-    // Hacer un crosshair más moderno con CSS
-    crosshair.innerHTML = `
-        <div style="position:absolute; width:16px; height:2px; background:rgba(0,255,0,0.7); top:9px; left:2px;"></div>
-        <div style="position:absolute; width:2px; height:16px; background:rgba(0,255,0,0.7); top:2px; left:9px;"></div>
-        <div style="position:absolute; width:6px; height:6px; border:1px solid rgba(0,255,0,0.7); border-radius:50%; top:6px; left:6px;"></div>
-    `;
-    
-    document.body.appendChild(crosshair);
-}
-
-function setupLighting() {
-    // Luz ambiental
-    const ambientLight = new THREE.AmbientLight(0x6688cc, 0.6); // Aumentada para reducir dependencia de sombras
-    scene.add(ambientLight);
-
-    // Luz direccional principal (sol)
-    const sunLight = new THREE.DirectionalLight(0xffffbb, 1.2);
-    sunLight.position.set(50, 50, 50);
-    
-    // Configurar sombras según nivel de calidad
-    if (qualityLevel !== 'low') {
-        sunLight.castShadow = true;
-        sunLight.shadow.mapSize.width = GAME_CONSTANTS.SHADOW_MAP_SIZE;
-        sunLight.shadow.mapSize.height = GAME_CONSTANTS.SHADOW_MAP_SIZE;
-        
-        // Optimizar frustum de cámara de sombras
-        const d = 30; // Reducido para optimizar
-        sunLight.shadow.camera.left = -d;
-        sunLight.shadow.camera.right = d;
-        sunLight.shadow.camera.top = d;
-        sunLight.shadow.camera.bottom = -d;
-        sunLight.shadow.camera.near = 10;
-        sunLight.shadow.camera.far = 80;
-    }
-    
-    scene.add(sunLight);
-
-    // Luz de relleno suave (solo en calidad media y alta)
-    if (qualityLevel !== 'low') {
-        const fillLight = new THREE.DirectionalLight(0x8888ff, 0.3);
-        fillLight.position.set(-50, 30, -50);
-        scene.add(fillLight);
-    }
-}
-
-function createEnvironment() {
-    // Crear skybox (cielo)
-    createSkybox();
-    
-    // Suelo futurista con cuadrícula
-    createFuturisticFloor();
-    
-    // Añadir niebla atmosférica
-    scene.fog = new THREE.FogExp2(0x0a1a2a, 0.015);
-    
-    // Crear paredes con efecto de cristal futurista
-    const wallMaterial = new THREE.MeshPhysicalMaterial({ 
-        color: 0x88ffff,
-        metalness: 0.9,
-        roughness: 0.1,
-        transparent: true,
-        opacity: 0.3,
-        side: THREE.DoubleSide
-    });
-
-    // Añadir árboles futuristas
-    createTrees(GAME_CONSTANTS.NUM_TREES);
-    
-    // Añadir rocas
-    createRocks(GAME_CONSTANTS.NUM_ROCKS);
-    
-    // Añadir elementos decorativos
-    createDecorations();
-}
-
-function createSkybox() {
-    const skyboxGeometry = new THREE.BoxGeometry(500, 500, 500);
-    const skyboxMaterials = [
-        new THREE.MeshBasicMaterial({ 
-            map: new THREE.TextureLoader().load('https://threejs.org/examples/textures/cube/skybox/px.jpg'), 
-            side: THREE.BackSide 
-        }),
-        new THREE.MeshBasicMaterial({ 
-            map: new THREE.TextureLoader().load('https://threejs.org/examples/textures/cube/skybox/nx.jpg'), 
-            side: THREE.BackSide 
-        }),
-        new THREE.MeshBasicMaterial({ 
-            map: new THREE.TextureLoader().load('https://threejs.org/examples/textures/cube/skybox/py.jpg'), 
-            side: THREE.BackSide 
-        }),
-        new THREE.MeshBasicMaterial({ 
-            map: new THREE.TextureLoader().load('https://threejs.org/examples/textures/cube/skybox/ny.jpg'), 
-            side: THREE.BackSide 
-        }),
-        new THREE.MeshBasicMaterial({ 
-            map: new THREE.TextureLoader().load('https://threejs.org/examples/textures/cube/skybox/pz.jpg'), 
-            side: THREE.BackSide 
-        }),
-        new THREE.MeshBasicMaterial({ 
-            map: new THREE.TextureLoader().load('https://threejs.org/examples/textures/cube/skybox/nz.jpg'), 
-            side: THREE.BackSide 
-        })
-    ];
-    skybox = new THREE.Mesh(skyboxGeometry, skyboxMaterials);
-    scene.add(skybox);
-}
-
-function createFuturisticFloor() {
-    // Textura base
-    const textureLoader = new THREE.TextureLoader();
-    const gridTexture = textureLoader.load('https://threejs.org/examples/textures/grid.png');
-    gridTexture.wrapS = THREE.RepeatWrapping;
-    gridTexture.wrapT = THREE.RepeatWrapping;
-    gridTexture.repeat.set(40, 40);
-    
-    // Material principal del suelo
-    const floorGeometry = new THREE.PlaneGeometry(GAME_CONSTANTS.ARENA_SIZE, GAME_CONSTANTS.ARENA_SIZE, 50, 50);
-    const floorMaterial = new THREE.MeshStandardMaterial({ 
-        map: gridTexture,
-        color: 0x0a1a2a,
-        roughness: 0.3,
-        metalness: 0.7,
-        emissive: 0x0066aa,
-        emissiveIntensity: 0.2
-    });
-    
-    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-    floor.rotation.x = -Math.PI / 2;
-    floor.receiveShadow = qualityLevel !== 'low';
-    scene.add(floor);
-    
-    // Añadir líneas de luz en el suelo (efecto neón)
-    floorGrid = new THREE.Group();
-    const lineSpacing = 5;
-    const lineColor = 0x00ffff;
-    
-    for (let x = -GAME_CONSTANTS.ARENA_SIZE/2; x <= GAME_CONSTANTS.ARENA_SIZE/2; x += lineSpacing) {
-        const lineGeometry = new THREE.BoxGeometry(0.1, 0.01, GAME_CONSTANTS.ARENA_SIZE);
-        const lineMaterial = new THREE.MeshBasicMaterial({ 
-            color: lineColor,
-            transparent: true,
-            opacity: 0.7
-        });
-        const line = new THREE.Mesh(lineGeometry, lineMaterial);
-        line.position.set(x, 0.01, 0);
-        floorGrid.add(line);
-    }
-    
-    for (let z = -GAME_CONSTANTS.ARENA_SIZE/2; z <= GAME_CONSTANTS.ARENA_SIZE/2; z += lineSpacing) {
-        const lineGeometry = new THREE.BoxGeometry(GAME_CONSTANTS.ARENA_SIZE, 0.01, 0.1);
-        const lineMaterial = new THREE.MeshBasicMaterial({ 
-            color: lineColor,
-            transparent: true,
-            opacity: 0.7
-        });
-        const line = new THREE.Mesh(lineGeometry, lineMaterial);
-        line.position.set(0, 0.01, z);
-        floorGrid.add(line);
-    }
-    
-    scene.add(floorGrid);
-    
-    // Añadir puntos de energía en las intersecciones
-    for (let x = -GAME_CONSTANTS.ARENA_SIZE/2; x <= GAME_CONSTANTS.ARENA_SIZE/2; x += lineSpacing) {
-        for (let z = -GAME_CONSTANTS.ARENA_SIZE/2; z <= GAME_CONSTANTS.ARENA_SIZE/2; z += lineSpacing) {
-            const pointGeometry = new THREE.SphereGeometry(0.15, 8, 8);
-            const pointMaterial = new THREE.MeshBasicMaterial({ 
-                color: 0x00ffff,
-                transparent: true,
-                opacity: 0.9
-            });
-            const point = new THREE.Mesh(pointGeometry, pointMaterial);
-            point.position.set(x, 0.05, z);
-            floorGrid.add(point);
-        }
-    }
-}
-
-function createTrees(count) {
-    for (let i = 0; i < count; i++) {
-        const x = (Math.random() - 0.5) * (GAME_CONSTANTS.ARENA_SIZE - 5);
-        const z = (Math.random() - 0.5) * (GAME_CONSTANTS.ARENA_SIZE - 5);
-        
-        // Crear árbol futurista
-        const treeGroup = new THREE.Group();
-        
-        // Base del árbol
-        const baseMaterial = new THREE.MeshStandardMaterial({
-            color: 0x333333,
-            roughness: 0.4,
-            metalness: 0.8
-        });
-        const baseGeometry = new THREE.CylinderGeometry(0.5, 0.8, 0.4, 8);
-        const base = new THREE.Mesh(baseGeometry, baseMaterial);
-        base.position.y = 0.2;
-        treeGroup.add(base);
-        
-        // Tronco
-        const trunkMaterial = new THREE.MeshStandardMaterial({
-            color: 0x444444,
-            roughness: 0.5,
-            metalness: 0.7,
-            emissive: 0x006600,
-            emissiveIntensity: 0.2
-        });
-        const trunkGeometry = new THREE.CylinderGeometry(0.2, 0.5, 3, 8);
-        const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
-        trunk.position.y = 1.9;
-        treeGroup.add(trunk);
-        
-        // Elementos luminosos
-        const glowMaterial = new THREE.MeshBasicMaterial({
-            color: 0x00ff66,
-            transparent: true,
-            opacity: 0.8
-        });
-        
-        for (let j = 0; j < 3; j++) {
-            const height = 0.8 + j * 1.0;
-            const radius = 0.8 - j * 0.15;
-            
-            // Anillos energéticos
-            const ringGeometry = new THREE.TorusGeometry(radius, 0.05, 8, 16);
-            const ring = new THREE.Mesh(ringGeometry, glowMaterial);
-            ring.position.y = height;
-            ring.rotation.x = Math.PI/2;
-            treeGroup.add(ring);
-            
-            // Esferas flotantes
-            for (let k = 0; k < 4; k++) {
-                const angle = (k / 4) * Math.PI * 2;
-                const orbGeometry = new THREE.SphereGeometry(0.1, 8, 8);
-                const orb = new THREE.Mesh(orbGeometry, glowMaterial);
-                orb.position.y = height;
-                orb.position.x = Math.cos(angle) * radius;
-                orb.position.z = Math.sin(angle) * radius;
-                treeGroup.add(orb);
-                
-                // Guardar para animación
-                orb.userData = {
-                    baseHeight: height,
-                    angle: angle,
-                    radius: radius,
-                    speed: 0.5 + Math.random()
-                };
-            }
-        }
-        
-        // Luz interna
-        const light = new THREE.PointLight(0x00ff66, 0.8, 5);
-        light.position.y = 2;
-        treeGroup.add(light);
-        
-        treeGroup.position.set(x, 0, z);
-        scene.add(treeGroup);
-    }
-}
-
-function createRocks(count) {
-    for (let i = 0; i < count; i++) {
-        const x = (Math.random() - 0.5) * (GAME_CONSTANTS.ARENA_SIZE - 3);
-        const z = (Math.random() - 0.5) * (GAME_CONSTANTS.ARENA_SIZE - 3);
-        
-        // Geometría de cristal para las rocas
-        const rockGeometry = new THREE.DodecahedronGeometry(Math.random() * 0.5 + 0.5, 0);
-        
-        const rockMaterial = new THREE.MeshPhysicalMaterial({ 
-            color: 0x6688dd,
-            roughness: 0.1,
-            metalness: 0.2,
-            transparent: true,
-            opacity: 0.7,
-            clearcoat: 1.0,
-            clearcoatRoughness: 0.2
-        });
-        
-        const rock = new THREE.Mesh(rockGeometry, rockMaterial);
-        rock.position.set(x, 0.5, z);
-        rock.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
-        rock.castShadow = true;
-        rock.receiveShadow = true;
-        
-        // Luz interior
-        const light = new THREE.PointLight(0x6688dd, 0.5, 2);
-        rock.add(light);
-        
-        scene.add(rock);
-    }
-}
-
-function createDecorations() {
-    // Pilares en las esquinas
-    const cornerPositions = [
-        {x: -GAME_CONSTANTS.ARENA_SIZE/2 + 2, z: -GAME_CONSTANTS.ARENA_SIZE/2 + 2},
-        {x: -GAME_CONSTANTS.ARENA_SIZE/2 + 2, z: GAME_CONSTANTS.ARENA_SIZE/2 - 2},
-        {x: GAME_CONSTANTS.ARENA_SIZE/2 - 2, z: -GAME_CONSTANTS.ARENA_SIZE/2 + 2},
-        {x: GAME_CONSTANTS.ARENA_SIZE/2 - 2, z: GAME_CONSTANTS.ARENA_SIZE/2 - 2}
-    ];
-    
-    for (const pos of cornerPositions) {
-        createEnergyPillar(pos.x, pos.z);
-    }
-}
-
-function createEnergyPillar(x, z) {
-    const pillarGroup = new THREE.Group();
-    
-    // Base
-    const baseGeometry = new THREE.CylinderGeometry(1, 1.2, 0.5, 8);
-    const baseMaterial = new THREE.MeshStandardMaterial({
-        color: 0x333333,
-        roughness: 0.3,
-        metalness: 0.9
-    });
-    const base = new THREE.Mesh(baseGeometry, baseMaterial);
-    base.position.y = 0.25;
-    pillarGroup.add(base);
-    
-    // Columna central
-    const pillarGeometry = new THREE.CylinderGeometry(0.5, 0.5, 8, 8);
-    const pillarMaterial = new THREE.MeshStandardMaterial({
-        color: 0x666666,
-        roughness: 0.5,
-        metalness: 0.8
-    });
-    const pillar = new THREE.Mesh(pillarGeometry, pillarMaterial);
-    pillar.position.y = 4.5;
-    pillarGroup.add(pillar);
-    
-    // Núcleo de energía
-    const coreGeometry = new THREE.CylinderGeometry(0.3, 0.3, 7, 8);
-    const coreMaterial = new THREE.MeshBasicMaterial({
-        color: 0x00ffff,
-        transparent: true,
-        opacity: 0.8
-    });
-    const core = new THREE.Mesh(coreGeometry, coreMaterial);
-    core.position.y = 4.5;
-    pillarGroup.add(core);
-    
-    // Anillos decorativos
-    for (let i = 0; i < 4; i++) {
-        const ringGeometry = new THREE.TorusGeometry(0.8, 0.1, 8, 16);
-        const ringMaterial = new THREE.MeshStandardMaterial({
-            color: 0x444444,
-            emissive: 0x00ffff,
-            emissiveIntensity: 0.3,
-            roughness: 0.3,
-            metalness: 0.9
-        });
-        const ring = new THREE.Mesh(ringGeometry, ringMaterial);
-        ring.position.y = 2 + i * 2;
-        ring.rotation.x = Math.PI/2;
-        pillarGroup.add(ring);
-    }
-    
-    // Luz
-    const light = new THREE.PointLight(0x00ffff, 1, 10);
-    light.position.y = 6;
-    pillarGroup.add(light);
-    
-    // Partículas de energía
-    const particleGroup = new THREE.Group();
-    for (let i = 0; i < 20; i++) {
-        const particleGeometry = new THREE.SphereGeometry(0.05, 4, 4);
-        const particleMaterial = new THREE.MeshBasicMaterial({
-            color: 0x00ffff,
-            transparent: true,
-            opacity: 0.8
-        });
-        const particle = new THREE.Mesh(particleGeometry, particleMaterial);
-        
-        const angle = Math.random() * Math.PI * 2;
-        const radius = 0.3 + Math.random() * 0.3;
-        const height = Math.random() * 7;
-        
-        particle.position.x = Math.cos(angle) * radius;
-        particle.position.z = Math.sin(angle) * radius;
-        particle.position.y = 1 + height;
-        
-        particle.userData = {
-            baseHeight: 1 + height,
-            angle: angle,
-            radius: radius,
-            speed: 0.2 + Math.random() * 0.5
-        };
-        
-        particleGroup.add(particle);
-        particles.push({
-            mesh: particle,
-            group: particleGroup
-        });
-    }
-    
-    pillarGroup.add(particleGroup);
-    pillarGroup.position.set(x, 0, z);
-    scene.add(pillarGroup);
-}
-
-// Actualizar animaciones del entorno
-function updateEnvironment(deltaTime) {
-    time += deltaTime * 0.001;
-    
-    // Animar partículas de energía
-    for (const particle of particles) {
-        const p = particle.mesh;
-        const data = p.userData;
-        
-        // Mover partículas en espiral
-        data.angle += data.speed * deltaTime * 0.01;
-        p.position.x = Math.cos(data.angle) * data.radius;
-        p.position.z = Math.sin(data.angle) * data.radius;
-        
-        // Fluctuación vertical
-        p.position.y = data.baseHeight + Math.sin(time * data.speed) * 0.2;
-    }
-    
-    // Animar intensidad de las líneas de la cuadrícula
-    if (floorGrid) {
-        for (let i = 0; i < floorGrid.children.length; i++) {
-            const line = floorGrid.children[i];
-            if (line.material) {
-                // Efecto pulsante
-                line.material.opacity = 0.5 + Math.sin(time * 2 + i * 0.1) * 0.3;
-            }
-        }
-    }
-}
-
-function createPlayer(id, position) {
-    // Grupo para el jugador
-    const playerGroup = new THREE.Group();
-
-    // Cuerpo (usando CylinderGeometry en lugar de CapsuleGeometry)
-    const bodyGeometry = new THREE.CylinderGeometry(0.5, 0.5, 2, 16);
-    const bodyMaterial = new THREE.MeshPhongMaterial({ 
-        color: id === myId ? 0x00ff88 : 0xff4444,
-        shininess: 70
-    });
-    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-    body.castShadow = true;
-    
-    // Si es el jugador local, hacemos el cuerpo invisible
-    if (id === myId) {
-        body.visible = false;
-    }
-    
-    playerGroup.add(body);
-
-    // Visor
-    const visorGeometry = new THREE.BoxGeometry(0.7, 0.3, 0.3);
-    const visorMaterial = new THREE.MeshPhongMaterial({
-        color: 0x88ffff,
-        shininess: 90,
-        transparent: true,
-        opacity: 0.8
-    });
-    const visor = new THREE.Mesh(visorGeometry, visorMaterial);
-    visor.position.y = 0.5;
-    visor.position.z = 0.3;
-    
-    // Si es el jugador local, hacemos el visor invisible
-    if (id === myId) {
-        visor.visible = false;
-    }
-    
-    playerGroup.add(visor);
-
-    // Luz del jugador
-    const playerLight = new THREE.PointLight(id === myId ? 0x00ff88 : 0xff4444, 1, 3);
-    playerLight.position.y = 1;
-    playerGroup.add(playerLight);
-
-    playerGroup.position.copy(position);
-    scene.add(playerGroup);
-    
-    players[id] = {
-        mesh: playerGroup,
-        health: GAME_CONSTANTS.MAX_HEALTH,
-        score: 0
-    };
-    
-    // Ajustar la cámara para el jugador local en primera persona
-    if (id === myId) {
-        // Posicionamos la cámara en la "cabeza" del jugador
-        camera.position.copy(playerGroup.position);
-        camera.position.y += 1.6; // Altura de los ojos
-        
-        // No añadimos la cámara al grupo del jugador para evitar que rote con el modelo,
-        // ya que queremos controlar la rotación de la cámara de forma independiente
-        
-        // Actualizamos la posición de la cámara en el bucle animate()
-    }
-
-    return playerGroup;
+    return texture;
 }
 
 function createBullet(position, direction, weapon) {
@@ -1944,49 +1379,41 @@ function connectToServer() {
     createPlayer(myId, startPosition);
 }
 
+// Modificar la función animate para incluir medición de FPS y control
 function animate(time) {
     requestAnimationFrame(animate);
     
-    // Calcular FPS
-    if (!lastFrameTime) {
-        lastFrameTime = time;
-        fpsUpdateTime = time;
+    // Calcular delta time y FPS
+    const now = performance.now();
+    const deltaTime = now - (lastFrameTime || now);
+    lastFrameTime = now;
+    
+    const fps = 1000 / deltaTime;
+    
+    // Actualizar sistema de calidad
+    qualityManager.updateFPS(fps);
+    
+    // Resto del código...
+    
+    // Renderizar escena
+    render(deltaTime);
+}
+
+// Separar renderizado para mejor control
+function render(deltaTime) {
+    const settings = qualityManager.settings[qualityManager.currentQuality];
+    
+    // En calidades bajas, renderizar a resolución reducida
+    if (qualityManager.currentQuality === 'low') {
+        // Reducir resolución del viewport temporalmente (técnica de dynamic resolution)
+        const pixelRatio = renderer.getPixelRatio();
+        renderer.setPixelRatio(pixelRatio * 0.75);
+        renderer.render(scene, camera);
+        renderer.setPixelRatio(pixelRatio);
+    } else {
+        // Renderizado normal
+        renderer.render(scene, camera);
     }
-    
-    const delta = time - lastFrameTime;
-    lastFrameTime = time;
-    
-    frameCount++;
-    
-    // Actualizar contador FPS cada 500ms
-    if (time - fpsUpdateTime > 500) {
-        fps = Math.round((frameCount * 1000) / (time - fpsUpdateTime));
-        
-        const fpsCounter = document.getElementById('fpsCounter');
-        if (fpsCounter) {
-            fpsCounter.textContent = `FPS: ${fps} (${qualityLevel})`;
-        }
-        
-        frameCount = 0;
-        fpsUpdateTime = time;
-        
-        // Ajuste automático de calidad (opcional)
-        if (fps < 30 && qualityLevel !== 'low') {
-            console.log('Rendimiento bajo detectado, ajustando calidad...');
-            // Aquí podrías reducir la calidad automáticamente
-        }
-    }
-    
-    if (players[myId]) {
-        const player = players[myId].mesh;
-        const moveSpeed = controls.run ? GAME_CONSTANTS.PLAYER_SPEED * 2 : GAME_CONSTANTS.PLAYER_SPEED;
-        
-        // Optimizar movimiento
-        movePlayer(player, moveSpeed, delta);
-    }
-    
-    updateBullets();
-    renderer.render(scene, camera);
 }
 
 // Función separada para movimiento (optimización)
@@ -2281,3 +1708,420 @@ function setupAudio() {
         }
     }
 } 
+
+// Añadir al inicio del archivo
+let qualityManager = {
+    currentQuality: 'auto', // 'low', 'medium', 'high', 'auto'
+    targetFPS: 45,
+    fpsHistory: [],
+    fpsUpdateInterval: 1000, // ms
+    lastFpsUpdate: 0,
+    autoAdjustInterval: 5000, // ms
+    lastAutoAdjust: 0,
+    
+    // Configuraciones para cada nivel de calidad
+    settings: {
+        low: {
+            shadowMapEnabled: false,
+            shadowMapSize: 512,
+            particlesEnabled: false,
+            maxLights: 2,
+            drawDistance: 30,
+            textureSizeMultiplier: 0.25,
+            objectDetail: 0.5,
+            postProcessing: false,
+            maxBullets: 10,
+            trees: 5,
+            rocks: 5,
+            reflections: false
+        },
+        medium: {
+            shadowMapEnabled: true,
+            shadowMapSize: 1024,
+            particlesEnabled: true,
+            maxLights: 4,
+            drawDistance: 50,
+            textureSizeMultiplier: 0.5,
+            objectDetail: 0.75,
+            postProcessing: false,
+            maxBullets: 15,
+            trees: 10,
+            rocks: 8,
+            reflections: false
+        },
+        high: {
+            shadowMapEnabled: true,
+            shadowMapSize: 2048,
+            particlesEnabled: true,
+            maxLights: 8,
+            drawDistance: 80,
+            textureSizeMultiplier: 1.0,
+            objectDetail: 1.0,
+            postProcessing: true,
+            maxBullets: 30,
+            trees: 20,
+            rocks: 15,
+            reflections: true
+        }
+    },
+    
+    // Detectar capacidad del dispositivo
+    detectCapability: function() {
+        // Algunas detecciones básicas
+        const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        const hardwareConcurrency = navigator.hardwareConcurrency || 4;
+        const isLowEndDevice = hardwareConcurrency <= 4 || isMobile;
+        const isHighEndDevice = !isMobile && hardwareConcurrency >= 8;
+        
+        if (isLowEndDevice) return 'low';
+        if (isHighEndDevice) return 'high';
+        return 'medium';
+    },
+    
+    // Inicializar
+    init: function() {
+        // Configurar calidad inicial basada en capacidad o preferencia
+        const savedQuality = localStorage.getItem('gameQuality');
+        
+        if (savedQuality && ['low', 'medium', 'high', 'auto'].includes(savedQuality)) {
+            this.currentQuality = savedQuality;
+        } else {
+            // Auto-detección por defecto
+            this.currentQuality = 'auto';
+        }
+        
+        // Si es auto, detectar ahora
+        if (this.currentQuality === 'auto') {
+            this.currentQuality = this.detectCapability();
+        }
+        
+        this.applySettings();
+        this.createQualityUI();
+    },
+    
+    // Aplicar configuración basada en calidad actual
+    applySettings: function() {
+        const settings = this.settings[this.currentQuality];
+        
+        // Aplicar configuraciones globales
+        GAME_CONSTANTS.NUM_TREES = settings.trees;
+        GAME_CONSTANTS.NUM_ROCKS = settings.rocks;
+        GAME_CONSTANTS.MAX_BULLETS = settings.maxBullets;
+        GAME_CONSTANTS.DRAW_DISTANCE = settings.drawDistance;
+        
+        // Aplicar a renderer si ya existe
+        if (renderer) {
+            renderer.shadowMap.enabled = settings.shadowMapEnabled;
+            if (settings.shadowMapEnabled) {
+                renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            }
+            
+            // Ajustar pixel ratio para dispositivos de alta densidad
+            const pixelRatio = settings.textureSizeMultiplier * (window.devicePixelRatio || 1);
+            renderer.setPixelRatio(Math.min(pixelRatio, 1.5));
+            
+            // Ajustar niebla para limitar distancia de dibujado
+            if (scene) {
+                scene.fog = new THREE.FogExp2(0x0a1a2a, 1 / (settings.drawDistance * 0.75));
+            }
+        }
+        
+        console.log(`Calidad aplicada: ${this.currentQuality}`);
+    },
+    
+    // Interfaz de usuario para ajustar calidad
+    createQualityUI: function() {
+        const container = document.createElement('div');
+        container.id = 'qualityControl';
+        container.style.position = 'absolute';
+        container.style.top = '10px';
+        container.style.left = '10px';
+        container.style.background = 'rgba(0,0,0,0.5)';
+        container.style.padding = '5px';
+        container.style.borderRadius = '5px';
+        container.style.color = 'white';
+        container.style.fontFamily = 'Arial, sans-serif';
+        container.style.fontSize = '12px';
+        container.style.zIndex = '1000';
+        
+        // FPS counter
+        const fpsDisplay = document.createElement('div');
+        fpsDisplay.id = 'fpsCounter';
+        fpsDisplay.innerHTML = 'FPS: --';
+        
+        // Calidad actual
+        const qualityDisplay = document.createElement('div');
+        qualityDisplay.id = 'qualityDisplay';
+        qualityDisplay.innerHTML = `Calidad: ${this.currentQuality.toUpperCase()}`;
+        
+        // Botones de calidad
+        const buttonsContainer = document.createElement('div');
+        buttonsContainer.style.display = 'flex';
+        buttonsContainer.style.gap = '5px';
+        buttonsContainer.style.marginTop = '5px';
+        
+        const qualities = ['low', 'medium', 'high', 'auto'];
+        qualities.forEach(quality => {
+            const button = document.createElement('button');
+            button.innerHTML = quality.charAt(0).toUpperCase() + quality.slice(1);
+            button.style.flex = '1';
+            button.style.padding = '3px';
+            button.style.background = this.currentQuality === quality ? '#4CAF50' : '#333';
+            button.style.color = 'white';
+            button.style.border = 'none';
+            button.style.borderRadius = '3px';
+            button.style.cursor = 'pointer';
+            
+            button.addEventListener('click', () => {
+                this.setQuality(quality);
+                // Actualizar estilos de botones
+                buttonsContainer.querySelectorAll('button').forEach(btn => {
+                    btn.style.background = '#333';
+                });
+                button.style.background = '#4CAF50';
+            });
+            
+            buttonsContainer.appendChild(button);
+        });
+        
+        container.appendChild(fpsDisplay);
+        container.appendChild(qualityDisplay);
+        container.appendChild(buttonsContainer);
+        
+        document.getElementById('game3d').appendChild(container);
+    },
+    
+    // Cambiar calidad
+    setQuality: function(quality) {
+        if (!['low', 'medium', 'high', 'auto'].includes(quality)) return;
+        
+        this.currentQuality = quality === 'auto' ? this.detectCapability() : quality;
+        localStorage.setItem('gameQuality', quality); // Guardar preferencia
+        
+        const qualityDisplay = document.getElementById('qualityDisplay');
+        if (qualityDisplay) {
+            qualityDisplay.innerHTML = `Calidad: ${this.currentQuality.toUpperCase()}`;
+        }
+        
+        this.applySettings();
+        
+        // Si es necesario, reiniciar partes del juego
+        this.rebuildSceneElements();
+    },
+    
+    // Actualizar FPS
+    updateFPS: function(fps) {
+        this.fpsHistory.push(fps);
+        if (this.fpsHistory.length > 10) this.fpsHistory.shift();
+        
+        const now = Date.now();
+        
+        // Actualizar UI de FPS
+        if (now - this.lastFpsUpdate > this.fpsUpdateInterval) {
+            const avgFPS = this.fpsHistory.reduce((a, b) => a + b, 0) / this.fpsHistory.length;
+            const fpsDisplay = document.getElementById('fpsCounter');
+            if (fpsDisplay) {
+                fpsDisplay.innerHTML = `FPS: ${Math.round(avgFPS)}`;
+                fpsDisplay.style.color = avgFPS < 30 ? '#ff3333' : avgFPS < 45 ? '#ffcc00' : '#66ff66';
+            }
+            this.lastFpsUpdate = now;
+        }
+        
+        // Auto-ajustar calidad si está en modo auto
+        if (localStorage.getItem('gameQuality') === 'auto' && now - this.lastAutoAdjust > this.autoAdjustInterval) {
+            const avgFPS = this.fpsHistory.reduce((a, b) => a + b, 0) / this.fpsHistory.length;
+            
+            // Si FPS es muy bajo, bajar calidad
+            if (avgFPS < 25 && this.currentQuality !== 'low') {
+                this.setQuality('low');
+                console.log('Auto-bajando calidad a LOW debido a bajo rendimiento');
+            }
+            // Si FPS es bajo pero aceptable, usar calidad media
+            else if (avgFPS < this.targetFPS && this.currentQuality === 'high') {
+                this.setQuality('medium');
+                console.log('Auto-bajando calidad a MEDIUM debido a rendimiento medio');
+            }
+            // Si FPS es muy alto, subir calidad
+            else if (avgFPS > this.targetFPS + 20 && this.currentQuality === 'low') {
+                this.setQuality('medium');
+                console.log('Auto-subiendo calidad a MEDIUM debido a buen rendimiento');
+            }
+            else if (avgFPS > this.targetFPS + 30 && this.currentQuality === 'medium') {
+                this.setQuality('high');
+                console.log('Auto-subiendo calidad a HIGH debido a excelente rendimiento');
+            }
+            
+            this.lastAutoAdjust = now;
+        }
+    },
+    
+    // Reconstruir elementos de la escena
+    rebuildSceneElements: function() {
+        // Aquí podrías reimplementar partes específicas del juego
+        // que necesitan ser actualizadas para la nueva calidad
+        
+        // Por ejemplo, volver a crear árboles y rocas con menos detalle
+        // Esta es una función simplificada, una implementación real
+        // debería eliminar los objetos antiguos primero
+        const settings = this.settings[this.currentQuality];
+        
+        if (scene) {
+            // Ejemplo: recrear árboles con menos detalle en calidad baja
+            // (Implementación específica dependería de tu código)
+        }
+    }
+}; 
+
+// Usar instanciado para objetos repetitivos (árboles, rocas)
+function createInstancedTrees(count) {
+    // Esta técnica reduce drásticamente el uso de CPU y mejora rendimiento
+    const settings = qualityManager.settings[qualityManager.currentQuality];
+    
+    // Geometrías base
+    const trunkGeometry = new THREE.CylinderGeometry(0.2, 0.3, 2, 6);
+    const leavesGeometry = new THREE.ConeGeometry(1.5, 2, 6);
+    
+    // Materiales
+    const trunkMaterial = new THREE.MeshLambertMaterial({color: 0x4d2926});
+    const leavesMaterial = new THREE.MeshLambertMaterial({color: 0x0d5c0d});
+    
+    // Crear instancias
+    const trunkInstance = new THREE.InstancedMesh(trunkGeometry, trunkMaterial, count);
+    const leavesInstance = new THREE.InstancedMesh(leavesGeometry, leavesMaterial, count);
+    
+    trunkInstance.castShadow = settings.shadowMapEnabled;
+    leavesInstance.castShadow = settings.shadowMapEnabled;
+    
+    // Calcular posiciones para cada instancia
+    const dummy = new THREE.Object3D();
+    
+    for (let i = 0; i < count; i++) {
+        const x = (Math.random() - 0.5) * (GAME_CONSTANTS.ARENA_SIZE - 5);
+        const z = (Math.random() - 0.5) * (GAME_CONSTANTS.ARENA_SIZE - 5);
+        
+        // Tronco
+        dummy.position.set(x, 1, z);
+        dummy.updateMatrix();
+        trunkInstance.setMatrixAt(i, dummy.matrix);
+        
+        // Hojas
+        dummy.position.set(x, 3, z);
+        dummy.updateMatrix();
+        leavesInstance.setMatrixAt(i, dummy.matrix);
+    }
+    
+    scene.add(trunkInstance);
+    scene.add(leavesInstance);
+}
+
+// Modificar init para usar el sistema de calidad
+function init() {
+    // Inicializar administrador de calidad primero
+    qualityManager.init();
+    
+    // Resto del código de inicialización con ajustes según calidad
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x88ccff);
+    
+    const settings = qualityManager.settings[qualityManager.currentQuality];
+    
+    // Configurar niebla según nivel de calidad
+    scene.fog = new THREE.FogExp2(0x88ccff, 1 / (settings.drawDistance * 0.75));
+    
+    // Configurar cámara con distancia de dibujado ajustada
+    camera = new THREE.PerspectiveCamera(
+        75, 
+        window.innerWidth / window.innerHeight, 
+        0.1, 
+        settings.drawDistance
+    );
+    
+    // Configurar renderer con opciones optimizadas
+    renderer = new THREE.WebGLRenderer({ 
+        antialias: qualityManager.currentQuality !== 'low',
+        powerPreference: 'high-performance'
+    });
+    
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    
+    // Ajustar pixel ratio
+    renderer.setPixelRatio(window.devicePixelRatio * settings.textureSizeMultiplier);
+    
+    // Configurar sombras según calidad
+    renderer.shadowMap.enabled = settings.shadowMapEnabled;
+    if (settings.shadowMapEnabled) {
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    }
+    
+    // Resto del código de init...
+}
+
+// Carga progresiva (para no bloquear el navegador)
+function progressiveLoad() {
+    // Mostrar pantalla de carga
+    showLoadingScreen();
+    
+    // Paso 1: Cargar elementos esenciales
+    setupBasicScene();
+    
+    // Paso 2: Añadir elementos en segundo plano
+    setTimeout(() => {
+        if (qualityManager.currentQuality !== 'low') {
+            loadDetailedAssets();
+        }
+        hideLoadingScreen();
+    }, 500);
+    
+    // Paso 3: Añadir elementos decorativos después
+    if (qualityManager.currentQuality === 'high') {
+        setTimeout(loadDecorations, 2000);
+    }
+}
+
+function showLoadingScreen() {
+    const loadingScreen = document.createElement('div');
+    loadingScreen.id = 'loadingScreen';
+    loadingScreen.style.position = 'absolute';
+    loadingScreen.style.top = '0';
+    loadingScreen.style.left = '0';
+    loadingScreen.style.width = '100%';
+    loadingScreen.style.height = '100%';
+    loadingScreen.style.background = 'rgba(0,0,0,0.8)';
+    loadingScreen.style.display = 'flex';
+    loadingScreen.style.justifyContent = 'center';
+    loadingScreen.style.alignItems = 'center';
+    loadingScreen.style.color = 'white';
+    loadingScreen.style.fontSize = '24px';
+    loadingScreen.style.zIndex = '1000';
+    
+    loadingScreen.innerHTML = `
+        <div>
+            <div style="text-align:center;margin-bottom:20px;">Cargando NeoArena...</div>
+            <div style="width:300px;height:10px;background:rgba(255,255,255,0.2);border-radius:5px;">
+                <div id="loadingBar" style="width:0%;height:10px;background:#4CAF50;border-radius:5px;"></div>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('game3d').appendChild(loadingScreen);
+}
+
+function updateLoadingProgress(percent) {
+    const loadingBar = document.getElementById('loadingBar');
+    if (loadingBar) {
+        loadingBar.style.width = `${percent}%`;
+    }
+}
+
+function hideLoadingScreen() {
+    const loadingScreen = document.getElementById('loadingScreen');
+    if (loadingScreen) {
+        loadingScreen.style.opacity = '0';
+        loadingScreen.style.transition = 'opacity 0.5s';
+        setTimeout(() => {
+            if (loadingScreen.parentNode) {
+                loadingScreen.parentNode.removeChild(loadingScreen);
+            }
+        }, 500);
+    }
+}
