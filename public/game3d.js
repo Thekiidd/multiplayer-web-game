@@ -2014,274 +2014,280 @@ function createInstancedTrees(count) {
     scene.add(leavesInstance);
 }
 
-// Modificar init para usar el sistema de calidad
+// Asegurarnos que todas las funciones necesarias estén definidas antes de usarlas
+
+// Primero definimos todas las funciones básicas que se necesitan para la inicialización
+function createEnvironment() {
+    console.log('Creando ambiente básico...');
+    
+    // Crear suelo básico
+    const floorGeometry = new THREE.PlaneGeometry(GAME_CONSTANTS.ARENA_SIZE, GAME_CONSTANTS.ARENA_SIZE);
+    const floorMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x0a1a2a,
+        roughness: 0.5
+    });
+    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    scene.add(floor);
+    
+    // Añadir paredes simples
+    const wallMaterial = new THREE.MeshPhysicalMaterial({ 
+        color: 0x88ffff,
+        transparent: true,
+        opacity: 0.3
+    });
+    
+    // Crear paredes
+    for (let i = 0; i < 4; i++) {
+        const wallGeometry = new THREE.BoxGeometry(GAME_CONSTANTS.ARENA_SIZE, GAME_CONSTANTS.WALL_HEIGHT, 0.5);
+        const wall = new THREE.Mesh(wallGeometry, wallMaterial);
+        wall.position.y = GAME_CONSTANTS.WALL_HEIGHT / 2;
+        
+        if (i % 2 === 0) {
+            wall.position.z = i === 0 ? -GAME_CONSTANTS.ARENA_SIZE / 2 : GAME_CONSTANTS.ARENA_SIZE / 2;
+        } else {
+            wall.rotation.y = Math.PI / 2;
+            wall.position.x = i === 1 ? GAME_CONSTANTS.ARENA_SIZE / 2 : -GAME_CONSTANTS.ARENA_SIZE / 2;
+        }
+        
+        scene.add(wall);
+    }
+}
+
+function createPlayer(id, position) {
+    console.log('Creando jugador básico...');
+    
+    // Grupo para el jugador
+    const playerGroup = new THREE.Group();
+    
+    // Cuerpo simple
+    const bodyGeometry = new THREE.CylinderGeometry(0.5, 0.5, 2, 16);
+    const bodyMaterial = new THREE.MeshPhongMaterial({ 
+        color: id === myId ? 0x00ff88 : 0xff4444
+    });
+    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    
+    // Si es el jugador local, hacemos el cuerpo invisible
+    if (id === myId) {
+        body.visible = false;
+    }
+    
+    playerGroup.add(body);
+    
+    // Añadir luz básica
+    const playerLight = new THREE.PointLight(id === myId ? 0x00ff88 : 0xff4444, 1, 3);
+    playerLight.position.y = 1;
+    playerGroup.add(playerLight);
+    
+    playerGroup.position.copy(position);
+    scene.add(playerGroup);
+    
+    // Guardar referencia del jugador
+    if (!players) players = {};
+    players[id] = {
+        mesh: playerGroup,
+        health: 100,
+        score: 0
+    };
+    
+    // Ajustar la cámara para el jugador local
+    if (id === myId) {
+        camera.position.set(0, 1.6, 0);
+        playerGroup.add(camera);
+    }
+    
+    return playerGroup;
+}
+
+function connectToServer() {
+    console.log('Conectando al servidor (simulado)...');
+    
+    // Simulación de conexión
+    myId = 'player1';
+    
+    // Crear jugador en posición aleatoria
+    const startPosition = new THREE.Vector3(
+        (Math.random() - 0.5) * (GAME_CONSTANTS.ARENA_SIZE - 10),
+        1,
+        (Math.random() - 0.5) * (GAME_CONSTANTS.ARENA_SIZE - 10)
+    );
+    
+    createPlayer(myId, startPosition);
+}
+
+// Ahora definimos la inicialización principal
 function init() {
     console.log('Iniciando juego 3D...');
     
-    // Configuración básica de Three.js con manejo de errores
-    try {
-        // Crear escena
-        scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x88ccff);
-        
-        // Crear cámara con valores seguros
-        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 5, 10); // Posición inicial segura
-        
-        console.log('Escena y cámara creadas');
-        
-        // Crear renderer con opciones mínimas primero
-        renderer = new THREE.WebGLRenderer({ antialias: false });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        
-        console.log('Renderer creado');
-        
-        // Comprobar si el renderer se creó correctamente
-        if (!renderer.domElement) {
-            throw new Error('No se pudo crear el elemento DOM del renderer');
-        }
-        
-        // Limpiar y añadir al contenedor
-        const container = document.getElementById('game3d');
-        if (!container) {
-            throw new Error('No se encontró el contenedor game3d');
-        }
-        
-        while (container.firstChild) {
-            container.removeChild(container.firstChild);
-        }
-        container.appendChild(renderer.domElement);
-        
-        console.log('Renderer añadido al DOM');
-        
-        // Verificar que el renderer está funcionando correctamente
-        const testRender = renderer.render(scene, camera);
-        console.log('Test de renderizado completado');
-        
-        // Añadir luz básica para ver objetos
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-        scene.add(ambientLight);
-        
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
-        directionalLight.position.set(10, 10, 10);
-        scene.add(directionalLight);
-        
-        console.log('Luces añadidas');
-        
-        // Crear suelo básico
-        const floorGeometry = new THREE.PlaneGeometry(50, 50);
-        const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x666666 });
-        const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-        floor.rotation.x = -Math.PI / 2;
-        scene.add(floor);
-        
-        console.log('Suelo añadido');
-        
-        // Eventos del navegador básicos
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-        
-        console.log('Eventos registrados');
-        
-        // Iniciar bucle de renderizado básico
-        function animateBasic() {
-            requestAnimationFrame(animateBasic);
-            renderer.render(scene, camera);
-        }
-        
-        // Iniciar animación
-        console.log('Iniciando animación básica');
-        animateBasic();
-        
-        // Si todo funciona, cargar el resto del juego
-        console.log('Inicialización básica completada, cargando resto del juego...');
-        setTimeout(loadGameComponents, 1000);
-        
-    } catch (e) {
-        console.error('Error en init():', e);
-        showErrorMessage('Error al inicializar el juego 3D: ' + e.message);
+    // Asegurarnos de que las funciones necesarias estén definidas
+    if (typeof createEnvironment !== 'function') {
+        console.error('Función createEnvironment no encontrada');
     }
+    
+    if (typeof createPlayer !== 'function') {
+        console.error('Función createPlayer no encontrada');
+    }
+    
+    if (typeof connectToServer !== 'function') {
+        console.error('Función connectToServer no encontrada');
+    }
+    
+    // Configuración básica de Three.js
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x88ccff);
+    
+    // Añadir niebla simple
+    scene.fog = new THREE.Fog(0x88ccff, 20, 60);
+    
+    // Crear cámara
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    
+    // Crear renderer
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    
+    // Limpiar el contenedor 3D
+    const container = document.getElementById('game3d');
+    while (container.firstChild) {
+        container.removeChild(container.firstChild);
+    }
+    container.appendChild(renderer.domElement);
+    
+    // Configuración básica
+    setupLighting();
+    setupControls();
+    
+    // Eventos del navegador
+    window.addEventListener('resize', onWindowResize, false);
+    document.addEventListener('mousemove', onMouseMove, false);
+    document.addEventListener('click', onMouseClick, false);
+    document.addEventListener('keydown', onKeyDown, false);
+    document.addEventListener('keyup', onKeyUp, false);
+    
+    // Cargar componentes gradualmente
+    setTimeout(loadGameComponents, 500);
+    
+    // Iniciar animación básica
+    animate();
 }
 
-// Función para cargar componentes del juego gradualmente
+function setupLighting() {
+    // Luz ambiental
+    const ambientLight = new THREE.AmbientLight(0x6688cc, 0.5);
+    scene.add(ambientLight);
+    
+    // Luz direccional
+    const sunLight = new THREE.DirectionalLight(0xffffbb, 1.2);
+    sunLight.position.set(50, 50, 50);
+    sunLight.castShadow = true;
+    scene.add(sunLight);
+}
+
+function setupControls() {
+    controls = {
+        moveForward: false,
+        moveBackward: false,
+        moveLeft: false,
+        moveRight: false,
+        run: false
+    };
+}
+
 function loadGameComponents() {
     try {
-        console.log('Cargando componentes adicionales...');
+        // 1. Crear ambiente
+        createEnvironment();
+        console.log('Ambiente creado correctamente');
         
-        // Aquí puedes añadir el resto de la lógica del juego
-        // de forma progresiva para identificar qué parte causa problemas
+        // 2. Conectar al servidor
+        connectToServer();
+        console.log('Conexión al servidor establecida');
         
-        // Por ejemplo:
-        // 1. Cargar controles
-        setupControls();
-        console.log('Controles cargados');
-        
-        // 2. Cargar ambiente
-        try {
-            createEnvironment();
-            console.log('Ambiente cargado');
-        } catch (e) {
-            console.error('Error al cargar ambiente:', e);
-            // Continuar con un ambiente básico
-        }
-        
-        // 3. Configurar jugador
-        try {
-            connectToServer();
-            console.log('Conexión al servidor establecida');
-        } catch (e) {
-            console.error('Error al conectar con servidor:', e);
-            // Crear jugador local básico para pruebas
-            const startPosition = new THREE.Vector3(0, 1, 0);
-            createPlayer('player1', startPosition);
-            myId = 'player1';
-        }
-        
-        // Cambiar al bucle de animación completo
-        console.log('Cambiando a animación completa');
-        cancelAnimationFrame(animateId);
-        animate();
-        
+        // 3. Configurar el HUD
+        createBasicHUD();
+        console.log('HUD creado correctamente');
     } catch (e) {
         console.error('Error al cargar componentes:', e);
-        showErrorMessage('Error al cargar componentes del juego: ' + e.message);
+        showErrorMessage('Error al cargar componentes: ' + e.message);
     }
 }
 
-// Carga progresiva (para no bloquear el navegador)
-function progressiveLoad() {
-    // Mostrar pantalla de carga
-    showLoadingScreen();
+function createBasicHUD() {
+    // Crosshair simple
+    const crosshair = document.createElement('div');
+    crosshair.id = 'crosshair3d';
+    crosshair.style.position = 'absolute';
+    crosshair.style.top = '50%';
+    crosshair.style.left = '50%';
+    crosshair.style.transform = 'translate(-50%, -50%)';
+    crosshair.style.width = '20px';
+    crosshair.style.height = '20px';
+    crosshair.style.color = 'rgba(0,255,0,0.7)';
+    crosshair.style.fontSize = '24px';
+    crosshair.style.fontWeight = 'bold';
+    crosshair.style.pointerEvents = 'none';
+    crosshair.innerHTML = '+';
     
-    // Paso 1: Cargar elementos esenciales
-    setupBasicScene();
-    
-    // Paso 2: Añadir elementos en segundo plano
-    setTimeout(() => {
-        if (qualityManager.currentQuality !== 'low') {
-            loadDetailedAssets();
+    document.getElementById('game3d').appendChild(crosshair);
+}
+
+// Funciones de evento básicas
+function onWindowResize() {
+    if (camera && renderer) {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+}
+
+function onMouseMove(event) {
+    // Implementación simplificada
+}
+
+function onMouseClick(event) {
+    // Implementación simplificada
+}
+
+function onKeyDown(event) {
+    if (controls) {
+        switch (event.code) {
+            case 'KeyW': controls.moveForward = true; break;
+            case 'KeyS': controls.moveBackward = true; break;
+            case 'KeyA': controls.moveLeft = true; break;
+            case 'KeyD': controls.moveRight = true; break;
+            case 'ShiftLeft': controls.run = true; break;
         }
-        hideLoadingScreen();
-    }, 500);
+    }
+}
+
+function onKeyUp(event) {
+    if (controls) {
+        switch (event.code) {
+            case 'KeyW': controls.moveForward = false; break;
+            case 'KeyS': controls.moveBackward = false; break;
+            case 'KeyA': controls.moveLeft = false; break;
+            case 'KeyD': controls.moveRight = false; break;
+            case 'ShiftLeft': controls.run = false; break;
+        }
+    }
+}
+
+function animate() {
+    requestAnimationFrame(animate);
     
-    // Paso 3: Añadir elementos decorativos después
-    if (qualityManager.currentQuality === 'high') {
-        setTimeout(loadDecorations, 2000);
-    }
-}
-
-function showLoadingScreen() {
-    const loadingScreen = document.createElement('div');
-    loadingScreen.id = 'loadingScreen';
-    loadingScreen.style.position = 'absolute';
-    loadingScreen.style.top = '0';
-    loadingScreen.style.left = '0';
-    loadingScreen.style.width = '100%';
-    loadingScreen.style.height = '100%';
-    loadingScreen.style.background = 'rgba(0,0,0,0.8)';
-    loadingScreen.style.display = 'flex';
-    loadingScreen.style.justifyContent = 'center';
-    loadingScreen.style.alignItems = 'center';
-    loadingScreen.style.color = 'white';
-    loadingScreen.style.fontSize = '24px';
-    loadingScreen.style.zIndex = '1000';
-    
-    loadingScreen.innerHTML = `
-        <div>
-            <div style="text-align:center;margin-bottom:20px;">Cargando NeoArena...</div>
-            <div style="width:300px;height:10px;background:rgba(255,255,255,0.2);border-radius:5px;">
-                <div id="loadingBar" style="width:0%;height:10px;background:#4CAF50;border-radius:5px;"></div>
-            </div>
-        </div>
-    `;
-    
-    document.getElementById('game3d').appendChild(loadingScreen);
-}
-
-function updateLoadingProgress(percent) {
-    const loadingBar = document.getElementById('loadingBar');
-    if (loadingBar) {
-        loadingBar.style.width = `${percent}%`;
-    }
-}
-
-function hideLoadingScreen() {
-    const loadingScreen = document.getElementById('loadingScreen');
-    if (loadingScreen) {
-        loadingScreen.style.opacity = '0';
-        loadingScreen.style.transition = 'opacity 0.5s';
-        setTimeout(() => {
-            if (loadingScreen.parentNode) {
-                loadingScreen.parentNode.removeChild(loadingScreen);
-            }
-        }, 500);
-    }
-}
-
-// Código de diagnóstico para detectar problemas
-
-// Comprobar soporte para WebGL
-function checkWebGLSupport() {
-    try {
-        const canvas = document.createElement('canvas');
-        return !!window.WebGLRenderingContext && 
-            (canvas.getContext('webgl') || canvas.getContext('experimental-webgl'));
-    } catch(e) {
-        return false;
-    }
-}
-
-// Manejador de errores para Three.js
-function initGameWithErrorHandling() {
-    // Comprobar WebGL primero
-    if (!checkWebGLSupport()) {
-        showErrorMessage('Tu navegador no soporta WebGL, que es necesario para ejecutar el juego 3D. Intenta con otro navegador como Chrome o Firefox.');
-        return;
-    }
-    
-    try {
-        // Intentar cargar Three.js
-        if (typeof THREE === 'undefined') {
-            throw new Error('No se pudo cargar la biblioteca Three.js');
+    if (scene && camera && renderer) {
+        // Actualizar posición jugador si existe
+        if (players && players[myId]) {
+            // Implementación simplificada del movimiento
         }
         
-        // Mostrar mensaje de carga
-        const loadingMessage = document.createElement('div');
-        loadingMessage.id = 'loadingMessage';
-        loadingMessage.style.position = 'absolute';
-        loadingMessage.style.top = '50%';
-        loadingMessage.style.left = '50%';
-        loadingMessage.style.transform = 'translate(-50%, -50%)';
-        loadingMessage.style.color = 'white';
-        loadingMessage.style.fontSize = '24px';
-        loadingMessage.style.textAlign = 'center';
-        loadingMessage.innerHTML = 'Cargando juego 3D...<br/><small>Si la pantalla permanece negra, revisa la consola para errores.</small>';
-        
-        const container = document.getElementById('game3d');
-        container.appendChild(loadingMessage);
-        
-        // Inicializar versión simplificada del juego
-        setTimeout(() => {
-            try {
-                initBasicGame();
-                if (loadingMessage.parentNode) {
-                    loadingMessage.parentNode.removeChild(loadingMessage);
-                }
-            } catch (e) {
-                console.error('Error al inicializar el juego básico:', e);
-                showErrorMessage('Error al inicializar: ' + e.message);
-            }
-        }, 500);
-        
-    } catch (e) {
-        console.error('Error durante la inicialización:', e);
-        showErrorMessage('Error al cargar el juego: ' + e.message);
+        renderer.render(scene, camera);
     }
 }
 
+// Mostrar mensajes de error
 function showErrorMessage(message) {
     const errorMessage = document.createElement('div');
     errorMessage.style.position = 'absolute';
@@ -2292,12 +2298,11 @@ function showErrorMessage(message) {
     errorMessage.style.color = 'white';
     errorMessage.style.padding = '20px';
     errorMessage.style.borderRadius = '10px';
-    errorMessage.style.maxWidth = '80%';
     errorMessage.style.textAlign = 'center';
     errorMessage.innerHTML = `
         <h3 style="color:#ff5555">Error en el juego 3D</h3>
         <p>${message}</p>
-        <p>Puedes intentar:</p>
+        <div>Puedes intentar:</div>
         <ul style="text-align:left">
             <li>Actualizar tu navegador</li>
             <li>Activar aceleración por hardware en la configuración del navegador</li>
@@ -2309,138 +2314,14 @@ function showErrorMessage(message) {
         </button>
     `;
     
-    const container = document.getElementById('game3d');
-    container.appendChild(errorMessage);
+    document.getElementById('game3d').appendChild(errorMessage);
     
-    // Botón para cambiar a modo 2D
     document.getElementById('try2DMode').addEventListener('click', () => {
-        const game3dContainer = document.getElementById('game3d');
-        const game2dContainer = document.getElementById('game2d');
-        
-        game3dContainer.style.display = 'none';
-        game2dContainer.style.display = 'block';
+        document.getElementById('game3d').style.display = 'none';
+        document.getElementById('game2d').style.display = 'block';
         startGame(); // Iniciar juego 2D
     });
 }
 
-// Versión simplificada del juego para diagnóstico
-function initBasicGame() {
-    // Crear escena básica
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x000000); // Fondo negro para diagnóstico
-    
-    // Cámara simple
-    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.z = 5;
-    
-    // Renderer con configuración mínima
-    renderer = new THREE.WebGLRenderer({ antialias: false });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    
-    // Limpiar contenedor
-    const container = document.getElementById('game3d');
-    while (container.firstChild) {
-        container.removeChild(container.firstChild);
-    }
-    container.appendChild(renderer.domElement);
-    
-    // Añadir un objeto simple para comprobar si el renderizado funciona
-    const geometry = new THREE.BoxGeometry(1, 1, 1);
-    const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 }); // Verde para mayor visibilidad
-    const cube = new THREE.Mesh(geometry, material);
-    scene.add(cube);
-    
-    // Añadir luz simple
-    const light = new THREE.DirectionalLight(0xffffff, 1);
-    light.position.set(0, 1, 1);
-    scene.add(light);
-    
-    // Texto de diagnóstico
-    const textDiv = document.createElement('div');
-    textDiv.style.position = 'absolute';
-    textDiv.style.top = '10px';
-    textDiv.style.left = '10px';
-    textDiv.style.color = 'white';
-    textDiv.style.background = 'rgba(0, 0, 0, 0.5)';
-    textDiv.style.padding = '10px';
-    textDiv.style.borderRadius = '5px';
-    textDiv.innerHTML = 'Modo de diagnóstico - Si ves este cubo verde, WebGL está funcionando';
-    container.appendChild(textDiv);
-    
-    // Animar el cubo para verificar que el bucle de renderizado funciona
-    function animate() {
-        requestAnimationFrame(animate);
-        
-        cube.rotation.x += 0.01;
-        cube.rotation.y += 0.01;
-        
-        renderer.render(scene, camera);
-    }
-    
-    animate();
-    
-    // Si todo funciona, intentar cargar el juego completo después de 3 segundos
-    setTimeout(() => {
-        try {
-            textDiv.innerHTML = 'Diagnóstico completado - Cargando juego completo...';
-            // Iniciar juego completo
-            init();
-        } catch(e) {
-            console.error('Error al cargar el juego completo:', e);
-            textDiv.innerHTML = 'Error al cargar el juego completo. Permaneciendo en modo diagnóstico.';
-        }
-    }, 3000);
-}
-
-// Reemplazar la inicialización normal con la versión segura
-window.addEventListener('load', () => {
-    try {
-        initGameWithErrorHandling();
-    } catch(e) {
-        console.error('Error crítico:', e);
-        alert('Error crítico al iniciar el juego: ' + e.message);
-    }
-});
-
-// Añadir botón flotante para alternar modos
-function addModeToggleButton() {
-    const toggleButton = document.createElement('button');
-    toggleButton.id = 'toggleGameMode';
-    toggleButton.style.position = 'absolute';
-    toggleButton.style.bottom = '20px';
-    toggleButton.style.left = '50%';
-    toggleButton.style.transform = 'translateX(-50%)';
-    toggleButton.style.padding = '8px 15px';
-    toggleButton.style.background = '#4CAF50';
-    toggleButton.style.color = 'white';
-    toggleButton.style.border = 'none';
-    toggleButton.style.borderRadius = '5px';
-    toggleButton.style.cursor = 'pointer';
-    toggleButton.style.zIndex = '1000';
-    toggleButton.innerHTML = 'Cambiar a modo 2D';
-    
-    toggleButton.addEventListener('click', () => {
-        const game3dContainer = document.getElementById('game3d');
-        const game2dContainer = document.getElementById('game2d');
-        
-        if (game3dContainer.style.display !== 'none') {
-            // Cambiar a 2D
-            game3dContainer.style.display = 'none';
-            game2dContainer.style.display = 'block';
-            startGame(); // Iniciar juego 2D
-            toggleButton.innerHTML = 'Cambiar a modo 3D';
-        } else {
-            // Cambiar a 3D
-            game2dContainer.style.display = 'none';
-            game3dContainer.style.display = 'block';
-            toggleButton.innerHTML = 'Cambiar a modo 2D';
-            // Reiniciar juego 3D
-            initGameWithErrorHandling();
-        }
-    });
-    
-    document.body.appendChild(toggleButton);
-}
-
-// Llamar a esta función al final de initGameWithErrorHandling
-addModeToggleButton();
+// Iniciar cuando se carga la página
+window.addEventListener('load', init);
