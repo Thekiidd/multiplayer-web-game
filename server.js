@@ -144,14 +144,30 @@ io.on('connection', (socket) => {
             // Incrementar el puntaje del asesino si existe
             if (data.killerId && players.has(data.killerId)) {
                 const killer = players.get(data.killerId);
-                killer.score = (killer.score || 0) + 1; // Incrementar puntaje
+                killer.score = (killer.score || 0) + 2; // Aumentado a 2 puntos por muerte
+                
+                // Bonus por racha de muertes
+                if (killer.killStreak) {
+                    killer.killStreak++;
+                    if (killer.killStreak >= 3) {
+                        killer.score++; // Punto extra por racha de 3 o más
+                    }
+                } else {
+                    killer.killStreak = 1;
+                }
+            }
+
+            // Resetear la racha de muertes del jugador que murió
+            if (player.killStreak) {
+                player.killStreak = 0;
             }
 
             // Emitir evento con información actualizada
             io.emit('playerDied', {
                 id: data.id,
                 killerId: data.killerId,
-                killerScore: data.killerId && players.has(data.killerId) ? players.get(data.killerId).score : null
+                killerScore: data.killerId && players.has(data.killerId) ? players.get(data.killerId).score : null,
+                killStreak: data.killerId && players.has(data.killerId) ? players.get(data.killerId).killStreak : 0
             });
         }
     });

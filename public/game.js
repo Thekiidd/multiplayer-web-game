@@ -137,9 +137,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const GAME_CONSTANTS = {
         PLAYER_SPEED: 5,
         PLAYER_SIZE: 30,
-        BULLET_SPEED: 25,
+        BULLET_SPEED: 30,
         BULLET_SIZE: 8,
-        BULLET_DAMAGE: 35,
+        BULLET_DAMAGE: 50,
         PLAYER_MAX_HEALTH: 100,
         POWER_DURATION: 10000,
         POWER_SPAWN_INTERVAL: 15000,
@@ -186,13 +186,13 @@ document.addEventListener('DOMContentLoaded', () => {
         constructor(x, y, angle) {
             this.x = x;
             this.y = y;
-            this.speed = 20;
-            this.size = 8;
+            this.speed = GAME_CONSTANTS.BULLET_SPEED;
+            this.size = GAME_CONSTANTS.BULLET_SIZE;
             this.angle = angle;
             this.distance = 0;
             this.maxDistance = 1500;
             this.trail = [];
-            this.damage = 25;
+            this.damage = GAME_CONSTANTS.BULLET_DAMAGE;
         }
 
         draw(screenX, screenY) {
@@ -315,6 +315,7 @@ document.addEventListener('DOMContentLoaded', () => {
             this.hasShield = false;
             this.damageMultiplier = 1;
             this.baseSpeed = GAME_CONSTANTS.PLAYER_SPEED;
+            this.killStreak = 0;
         }
 
         draw() {
@@ -354,7 +355,11 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.fillStyle = 'white';
             ctx.font = '16px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText(`${this.name} (${this.score})`, screenX, screenY - this.size - 20);
+            let scoreText = `${this.name} (${this.score})`;
+            if (this.killStreak >= 3) {
+                scoreText += ` 🔥${this.killStreak}`;
+            }
+            ctx.fillText(scoreText, screenX, screenY - this.size - 20);
 
             this.bullets.forEach(bullet => {
                 const bulletScreenX = bullet.x - camera.x;
@@ -697,12 +702,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 player.health = 0;
                 player.respawnTime = Date.now() + 3000;
                 player.bullets = [];
+                player.killStreak = 0; // Resetear racha al morir
                 
-                // Actualizar el puntaje del asesino desde el servidor
+                // Actualizar el puntaje y racha del asesino desde el servidor
                 if (data.killerId && players.has(data.killerId)) {
                     const killer = players.get(data.killerId);
-                    killer.score = data.killerScore; // Usar el puntaje enviado por el servidor
-                    updateScoreboard(); // Actualizar el scoreboard inmediatamente
+                    killer.score = data.killerScore;
+                    killer.killStreak = data.killStreak;
+                    
+                    // Mostrar mensaje de racha si es 3 o más
+                    if (data.killStreak >= 3) {
+                        const killMessage = document.createElement('div');
+                        killMessage.className = 'kill-streak-message';
+                        killMessage.textContent = `¡${killer.name} está en racha! (${data.killStreak} muertes)`;
+                        document.body.appendChild(killMessage);
+                        setTimeout(() => killMessage.remove(), 3000);
+                    }
+                    
+                    updateScoreboard();
                 }
             }
         });
