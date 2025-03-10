@@ -1,3 +1,14 @@
+            
+            // Límites del mapa
+            const limit = GAME_CONSTANTS.ARENA_SIZE / 2 - 2;
+            player.position.x = Math.max(-limit, Math.min(limit, player.position.x));
+            player.position.z = Math.max(-limit, Math.min(limit, player.position.z));
+            
+            // Seguir al jugador con la cámara
+            camera.position.y = player.position.y + 1.6; // Altura de ojos
+        }
+        
+        renderer.render(scene, camera);
 // Configuración inicial de Three.js
 let scene, camera, renderer;
 let players = {};
@@ -1936,6 +1947,11 @@ let qualityManager = {
                 this.setQuality('low');
                 console.log('Auto-bajando calidad a LOW debido a bajo rendimiento');
             }
+    }
+}
+
+// Mostrar mensajes de error
+function showErrorMessage(message) {
             // Si FPS es bajo pero aceptable, usar calidad media
             else if (avgFPS < this.targetFPS && this.currentQuality === 'high') {
                 this.setQuality('medium');
@@ -2214,6 +2230,135 @@ function loadGameComponents() {
     }
 }
 
+// Añade esta función para mostrar el estado del juego en pantalla
+function addStatusDisplay() {
+    const statusDisplay = document.createElement('div');
+    const errorMessage = document.createElement('div');
+    errorMessage.style.position = 'absolute';
+    errorMessage.style.top = '50%';
+    errorMessage.style.left = '50%';
+    errorMessage.style.transform = 'translate(-50%, -50%)';
+    errorMessage.style.background = 'rgba(0, 0, 0, 0.8)';
+    errorMessage.style.color = 'white';
+    errorMessage.style.padding = '20px';
+    errorMessage.style.borderRadius = '10px';
+    errorMessage.style.textAlign = 'center';
+    errorMessage.innerHTML = `
+        <h3 style="color:#ff5555">Error en el juego 3D</h3>
+        <p>${message}</p>
+        <div>Puedes intentar:</div>
+        <ul style="text-align:left">
+            <li>Actualizar tu navegador</li>
+            <li>Activar aceleración por hardware en la configuración del navegador</li>
+            <li>Usar otro navegador como Chrome o Firefox</li>
+            <li>Probar en un dispositivo con mejor rendimiento gráfico</li>
+        </ul>
+        <button id="try2DMode" style="padding:10px 20px;background:#4CAF50;color:white;border:none;border-radius:5px;margin-top:15px;cursor:pointer">
+            Probar modo 2D
+        </button>
+    `;
+    
+    document.getElementById('game3d').appendChild(errorMessage);
+    
+    document.getElementById('try2DMode').addEventListener('click', () => {
+        document.getElementById('game3d').style.display = 'none';
+        document.getElementById('game2d').style.display = 'block';
+        startGame(); // Iniciar juego 2D
+    });
+}
+
+// Iniciar cuando se carga la página
+window.addEventListener('load', init);
+
+// Añade esta función para mejorar el ambiente 3D
+    statusDisplay.id = 'gameStatus3D';
+function enhanceEnvironment() {
+    console.log('Mejorando el ambiente 3D...');
+    
+    // Añadir algunas cajas para referencia visual
+    statusDisplay.style.position = 'absolute';
+    statusDisplay.style.top = '10px';
+    statusDisplay.style.right = '10px';
+    for (let i = 0; i < 10; i++) {
+        const boxSize = Math.random() * 2 + 0.5;
+    statusDisplay.style.background = 'rgba(0,0,0,0.7)';
+        const boxGeometry = new THREE.BoxGeometry(boxSize, boxSize, boxSize);
+    statusDisplay.style.color = 'white';
+        const boxMaterial = new THREE.MeshStandardMaterial({
+    statusDisplay.style.padding = '10px';
+    statusDisplay.style.borderRadius = '5px';
+            color: 0x00aaff,
+            metalness: 0.5,
+            roughness: 0.5
+        });
+        const box = new THREE.Mesh(boxGeometry, boxMaterial);
+    statusDisplay.style.fontFamily = 'Arial, sans-serif';
+        
+        // Posición aleatoria
+    statusDisplay.style.fontSize = '14px';
+        box.position.x = (Math.random() - 0.5) * 40;
+    statusDisplay.style.minWidth = '200px';
+    
+    statusDisplay.innerHTML = `
+        box.position.y = boxSize / 2;
+        box.position.z = (Math.random() - 0.5) * 40;
+        <div>Estado: <span id="gameState3D">Activo</span></div>
+        <div>Controles:</div>
+        <div>- WASD: Moverse</div>
+        
+        // Rotación aleatoria
+        <div>- Shift: Correr</div>
+        box.rotation.y = Math.random() * Math.PI * 2;
+        
+        box.castShadow = true;
+        box.receiveShadow = true;
+        scene.add(box);
+    }
+    
+    // Añadir mejoras al jugador
+    if (players && players[myId]) {
+        // Luz que sigue al jugador
+        const playerPointLight = new THREE.PointLight(0x00ff00, 1, 10);
+        <div>- Mouse: Mirar</div>
+        <div>- Click: Disparar</div>
+        playerPointLight.position.y = 2;
+        players[myId].mesh.add(playerPointLight);
+        <div id="playerPos3D"></div>
+        <button id="switch2D" style="margin-top:10px;padding:5px;background:#4CAF50;color:white;border:none;border-radius:3px;cursor:pointer">
+            Cambiar a 2D
+        </button>
+    `;
+    
+    document.getElementById('game3d').appendChild(statusDisplay);
+    
+    // Actualizar posición del jugador
+    }
+    
+    // Mejorar la luz ambiental
+    scene.remove(...scene.children.filter(child => child instanceof THREE.AmbientLight));
+    setInterval(() => {
+        if (players && players[myId]) {
+            const pos = players[myId].mesh.position;
+            document.getElementById('playerPos3D').innerText = 
+    const betterAmbientLight = new THREE.AmbientLight(0x6688cc, 0.7);
+                `Posición: (${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)})`;
+    scene.add(betterAmbientLight);
+    
+    // Añadir niebla para dar sensación de profundidad
+        }
+    }, 100);
+    
+    // Añadir botón para cambiar a 2D
+    scene.fog = new THREE.FogExp2(0x88ccff, 0.015);
+    document.getElementById('switch2D').addEventListener('click', () => {
+}
+        document.getElementById('game3d').style.display = 'none';
+        document.getElementById('game2d').style.display = 'block';
+        if (typeof startGame === 'function') startGame();
+    });
+}
+
+// Llamar a esta función al final de createBasicHUD
 function createBasicHUD() {
     // Crosshair simple
     const crosshair = document.createElement('div');
@@ -2231,6 +2376,9 @@ function createBasicHUD() {
     crosshair.innerHTML = '+';
     
     document.getElementById('game3d').appendChild(crosshair);
+    
+    // Añadir panel de estado
+    addStatusDisplay();
 }
 
 // Funciones de evento básicas

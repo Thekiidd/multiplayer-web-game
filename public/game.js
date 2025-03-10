@@ -1260,9 +1260,30 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     botonJugar.disabled = true;
 
-    botonJugar.addEventListener('click', startGame);
-    nombreInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter' && !botonJugar.disabled) startGame();
+    document.addEventListener('DOMContentLoaded', () => {
+        const botonJugar = document.getElementById('botonJugar');
+        if (botonJugar) {
+            botonJugar.addEventListener('click', () => {
+                const menuInicial = document.getElementById('menuInicial');
+                if (menuInicial) menuInicial.style.display = 'none';
+
+                if (selectedVersion === '3d') {
+                    const game3dContainer = document.getElementById('game3d');
+                    const game2dContainer = document.getElementById('game2d');
+                    if (game3dContainer) game3dContainer.style.display = 'block';
+                    if (game2dContainer) game2dContainer.style.display = 'none';
+                    if (typeof init === 'function') init(); // Función de inicio del juego 3D
+                } else {
+                    const game2dContainer = document.getElementById('game2d');
+                    const game3dContainer = document.getElementById('game3d');
+                    if (game2dContainer) game2dContainer.style.display = 'block';
+                    if (game3dContainer) game3dContainer.style.display = 'none';
+                    if (typeof startGame === 'function') startGame(); // Función de inicio del juego 2D
+                }
+            });
+        } else {
+            console.warn("Elemento 'botonJugar' no encontrado en el DOM");
+        }
     });
 
     document.getElementById('playerAvatar').addEventListener('change', function(e) {
