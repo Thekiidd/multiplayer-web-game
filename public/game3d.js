@@ -397,21 +397,41 @@ function onMouseClick(event) {
 
 function onKeyDown(event) {
     switch (event.code) {
-        case 'KeyW': controls.moveForward = true; break;
-        case 'KeyS': controls.moveBackward = true; break;
-        case 'KeyA': controls.moveLeft = true; break;
-        case 'KeyD': controls.moveRight = true; break;
-        case 'ShiftLeft': controls.run = true; break;
+        case 'KeyW':
+            controls.moveForward = true;
+            break;
+        case 'KeyS':
+            controls.moveBackward = true;
+            break;
+        case 'KeyA':
+            controls.moveLeft = true;
+            break;
+        case 'KeyD':
+            controls.moveRight = true;
+            break;
+        case 'ShiftLeft':
+            controls.run = true;
+            break;
     }
 }
 
 function onKeyUp(event) {
     switch (event.code) {
-        case 'KeyW': controls.moveForward = false; break;
-        case 'KeyS': controls.moveBackward = false; break;
-        case 'KeyA': controls.moveLeft = false; break;
-        case 'KeyD': controls.moveRight = false; break;
-        case 'ShiftLeft': controls.run = false; break;
+        case 'KeyW':
+            controls.moveForward = false;
+            break;
+        case 'KeyS':
+            controls.moveBackward = false;
+            break;
+        case 'KeyA':
+            controls.moveLeft = false;
+            break;
+        case 'KeyD':
+            controls.moveRight = false;
+            break;
+        case 'ShiftLeft':
+            controls.run = false;
+            break;
     }
 }
 
@@ -479,85 +499,43 @@ function updateBullets() {
 }
 
 function connectToServer() {
-    socket = io();
+    // Crear un ID temporal para pruebas
+    myId = 'player1';
     
-    socket.on('connect', () => {
-        myId = socket.id;
-        console.log('Conectado al servidor con ID:', myId);
-    });
+    // Crear jugador inicial en una posición aleatoria
+    const startPosition = new THREE.Vector3(
+        (Math.random() - 0.5) * (GAME_CONSTANTS.ARENA_SIZE - 10),
+        1,
+        (Math.random() - 0.5) * (GAME_CONSTANTS.ARENA_SIZE - 10)
+    );
     
-    socket.on('playerJoined', (data) => {
-        createPlayer(data.id, new THREE.Vector3(data.position.x, data.position.y, data.position.z));
-    });
-    
-    socket.on('playerLeft', (id) => {
-        if (players[id]) {
-            scene.remove(players[id].mesh);
-            delete players[id];
-        }
-    });
-    
-    socket.on('playerMoved', (data) => {
-        if (players[data.id] && data.id !== myId) {
-            const player = players[data.id].mesh;
-            player.position.set(data.position.x, data.position.y, data.position.z);
-            player.rotation.set(data.rotation._x, data.rotation._y, data.rotation._z);
-        }
-    });
-    
-    socket.on('bulletFired', (data) => {
-        if (data.playerId !== myId) {
-            createBullet(
-                new THREE.Vector3(data.position.x, data.position.y, data.position.z),
-                new THREE.Vector3(data.direction.x, data.direction.y, data.direction.z)
-            );
-        }
-    });
-    
-    socket.on('playerHit', (data) => {
-        if (players[data.playerId]) {
-            players[data.playerId].health -= GAME_CONSTANTS.BULLET_DAMAGE;
-            if (players[data.playerId].health <= 0) {
-                scene.remove(players[data.playerId].mesh);
-                delete players[data.playerId];
-                if (data.playerId === myId) {
-                    setTimeout(() => {
-                        createPlayer(myId, new THREE.Vector3(
-                            (Math.random() - 0.5) * GAME_CONSTANTS.ARENA_SIZE,
-                            GAME_CONSTANTS.PLAYER_SIZE,
-                            (Math.random() - 0.5) * GAME_CONSTANTS.ARENA_SIZE
-                        ));
-                    }, 3000);
-                }
-            }
-        }
-    });
-    
-    socket.on('powerUpSpawned', (data) => {
-        createPowerUp(
-            new THREE.Vector3(data.position.x, data.position.y, data.position.z),
-            data.type
-        );
-    });
-    
-    socket.on('powerUpCollected', (data) => {
-        const powerUp = powerUps.find(p => 
-            p.position.x === data.position.x &&
-            p.position.y === data.position.y &&
-            p.position.z === data.position.z
-        );
-        
-        if (powerUp) {
-            scene.remove(powerUp);
-            powerUps = powerUps.filter(p => p !== powerUp);
-        }
-    });
+    createPlayer(myId, startPosition);
 }
 
 function animate() {
     requestAnimationFrame(animate);
     
-    updatePlayerPosition();
+    if (players[myId]) {
+        // Actualizar posición del jugador basado en controles
+        const player = players[myId].mesh;
+        const moveSpeed = controls.run ? GAME_CONSTANTS.PLAYER_SPEED * 2 : GAME_CONSTANTS.PLAYER_SPEED;
+        
+        if (controls.moveForward) player.position.z -= moveSpeed;
+        if (controls.moveBackward) player.position.z += moveSpeed;
+        if (controls.moveLeft) player.position.x -= moveSpeed;
+        if (controls.moveRight) player.position.x += moveSpeed;
+        
+        // Limitar posición dentro de la arena
+        player.position.x = Math.max(-GAME_CONSTANTS.ARENA_SIZE/2 + 2, Math.min(GAME_CONSTANTS.ARENA_SIZE/2 - 2, player.position.x));
+        player.position.z = Math.max(-GAME_CONSTANTS.ARENA_SIZE/2 + 2, Math.min(GAME_CONSTANTS.ARENA_SIZE/2 - 2, player.position.z));
+        
+        // Actualizar posición de la cámara
+        camera.position.copy(player.position);
+        camera.position.y = 5;
+        camera.position.z += 8;
+        camera.lookAt(player.position);
+    }
+    
     updateBullets();
     
     renderer.render(scene, camera);
