@@ -35,8 +35,8 @@
         </div>
     </div>
 
-    <!-- Contenedor del Juego -->
-    <div class="game-container" style="display: none;">
+    <!-- Contenedor del Juego 2D -->
+    <div id="game2d" class="game-container" style="display: none;">
         <canvas id="gameCanvas"></canvas>
         <div id="gameUI">
             <div id="gameStatus">
@@ -66,6 +66,22 @@
         </div>
     </div>
 
+    <!-- Contenedor del Juego 3D -->
+    <div id="game3d" class="game-container" style="display: none;">
+        <div id="gameUI3d">
+            <div id="gameStatus3d">
+                Jugadores: <span id="playerCount3d">0</span>
+            </div>
+            <div id="scoreboard3d">
+                <h3>🏆 Top Jugadores</h3>
+                <div id="scoreList3d"></div>
+            </div>
+            <div id="healthBar3d">
+                <div id="healthFill3d"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- Crosshair -->
     <div id="crosshair">+</div>
 
@@ -73,6 +89,8 @@
         // Gestión de versiones
         let selectedVersion = '2d';
         const versionButtons = document.querySelectorAll('.version-button');
+        const game2dContainer = document.getElementById('game2d');
+        const game3dContainer = document.getElementById('game3d');
         
         versionButtons.forEach(button => {
             button.addEventListener('click', () => {
@@ -84,13 +102,16 @@
 
         // Modificar el evento de inicio del juego
         document.getElementById('botonJugar').addEventListener('click', () => {
+            const menuInicial = document.getElementById('menuInicial');
+            menuInicial.style.display = 'none';
+
             if (selectedVersion === '3d') {
-                // Desactivar el script 2D y activar el 3D
-                document.querySelector('script[src="game.js"]').remove();
+                game3dContainer.style.display = 'block';
+                game2dContainer.style.display = 'none';
                 init(); // Función de inicio del juego 3D
             } else {
-                // Desactivar el script 3D y mantener el 2D
-                document.querySelector('script[src="game3d.js"]').remove();
+                game2dContainer.style.display = 'block';
+                game3dContainer.style.display = 'none';
                 startGame(); // Función de inicio del juego 2D
             }
         });

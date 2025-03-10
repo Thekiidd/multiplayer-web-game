@@ -24,23 +24,84 @@ const GAME_CONSTANTS = {
     POWER_SPAWN_INTERVAL: 10000,
     MAX_HEALTH: 100,
     ARENA_SIZE: 50,
-    WALL_HEIGHT: 3
+    WALL_HEIGHT: 5,
+    NUM_TREES: 20,
+    NUM_ROCKS: 15
 };
+
+function createTree(x, z) {
+    const treeGroup = new THREE.Group();
+
+    // Tronco
+    const trunkGeometry = new THREE.CylinderGeometry(0.2, 0.3, 2, 8);
+    const trunkMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x4d2926,
+        roughness: 0.9 
+    });
+    const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+    trunk.castShadow = true;
+    trunk.receiveShadow = true;
+    treeGroup.add(trunk);
+
+    // Copa del árbol (varios niveles)
+    const levels = 3;
+    for (let i = 0; i < levels; i++) {
+        const size = 2 - (i * 0.4);
+        const height = 1 + (i * 1.5);
+        const leavesGeometry = new THREE.ConeGeometry(size, 2, 8);
+        const leavesMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x0d5c0d,
+            roughness: 0.8
+        });
+        const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
+        leaves.position.y = height;
+        leaves.castShadow = true;
+        treeGroup.add(leaves);
+    }
+
+    treeGroup.position.set(x, 0, z);
+    return treeGroup;
+}
+
+function createRock(x, z) {
+    const rockGeometry = new THREE.DodecahedronGeometry(Math.random() * 0.5 + 0.5);
+    const rockMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x666666,
+        roughness: 0.9,
+        metalness: 0.1
+    });
+    const rock = new THREE.Mesh(rockGeometry, rockMaterial);
+    rock.position.set(x, 0.5, z);
+    rock.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+    rock.castShadow = true;
+    rock.receiveShadow = true;
+    return rock;
+}
 
 // Inicialización del juego
 function init() {
     // Configuración básica de Three.js
     scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x88ccff); // Cielo azul claro
+    scene.fog = new THREE.Fog(0x88ccff, 20, 60); // Niebla para ambiente
+
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
-    document.querySelector('.game-container').appendChild(renderer.domElement);
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    
+    // Limpiar el contenedor 3D si ya tiene contenido
+    const container = document.getElementById('game3d');
+    while (container.firstChild) {
+        container.removeChild(container.firstChild);
+    }
+    container.appendChild(renderer.domElement);
 
     // Configuración de la iluminación
     setupLighting();
 
-    // Configuración del suelo y paredes
+    // Configuración del ambiente
     createEnvironment();
 
     // Configuración de controles
@@ -60,31 +121,53 @@ function init() {
     // Iniciar la conexión con el servidor
     connectToServer();
 
+    // Posicionar la cámara inicialmente
+    camera.position.set(0, 10, 20);
+    camera.lookAt(0, 0, 0);
+
     // Iniciar el bucle de renderizado
     animate();
 }
 
 function setupLighting() {
-    const ambientLight = new THREE.AmbientLight(0x404040);
+    // Luz ambiental
+    const ambientLight = new THREE.AmbientLight(0x6688cc, 0.5);
     scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-    directionalLight.position.set(10, 20, 10);
-    directionalLight.castShadow = true;
-    scene.add(directionalLight);
+    // Luz direccional principal (sol)
+    const sunLight = new THREE.DirectionalLight(0xffffbb, 1.2);
+    sunLight.position.set(50, 50, 50);
+    sunLight.castShadow = true;
+    
+    // Configuración de sombras de alta calidad
+    sunLight.shadow.mapSize.width = 2048;
+    sunLight.shadow.mapSize.height = 2048;
+    sunLight.shadow.camera.near = 0.5;
+    sunLight.shadow.camera.far = 150;
+    sunLight.shadow.camera.left = -50;
+    sunLight.shadow.camera.right = 50;
+    sunLight.shadow.camera.top = 50;
+    sunLight.shadow.camera.bottom = -50;
+    
+    scene.add(sunLight);
 
-    // Configuración de sombras
-    directionalLight.shadow.mapSize.width = 2048;
-    directionalLight.shadow.mapSize.height = 2048;
-    directionalLight.shadow.camera.near = 0.5;
-    directionalLight.shadow.camera.far = 50;
+    // Luz de relleno suave
+    const fillLight = new THREE.DirectionalLight(0x8888ff, 0.3);
+    fillLight.position.set(-50, 30, -50);
+    scene.add(fillLight);
 }
 
 function createEnvironment() {
-    // Crear suelo
+    // Crear suelo con textura de hierba
+    const textureLoader = new THREE.TextureLoader();
+    const grassTexture = textureLoader.load('https://threejs.org/examples/textures/terrain/grasslight-big.jpg');
+    grassTexture.wrapS = THREE.RepeatWrapping;
+    grassTexture.wrapT = THREE.RepeatWrapping;
+    grassTexture.repeat.set(8, 8);
+
     const floorGeometry = new THREE.PlaneGeometry(GAME_CONSTANTS.ARENA_SIZE, GAME_CONSTANTS.ARENA_SIZE);
     const floorMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0x333333,
+        map: grassTexture,
         roughness: 0.8,
         metalness: 0.2
     });
@@ -93,34 +176,67 @@ function createEnvironment() {
     floor.receiveShadow = true;
     scene.add(floor);
 
-    // Crear paredes
-    const wallMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0x666666,
-        roughness: 0.7,
-        metalness: 0.3
+    // Crear paredes con efecto de cristal futurista
+    const wallMaterial = new THREE.MeshPhysicalMaterial({ 
+        color: 0x88ffff,
+        metalness: 0.9,
+        roughness: 0.1,
+        transparent: true,
+        opacity: 0.3,
+        side: THREE.DoubleSide
     });
 
-    // Pared norte
-    const wallNorth = createWall(wallMaterial);
-    wallNorth.position.z = -GAME_CONSTANTS.ARENA_SIZE / 2;
-    scene.add(wallNorth);
+    // Paredes
+    const walls = [];
+    for (let i = 0; i < 4; i++) {
+        const wall = createWall(wallMaterial);
+        if (i % 2 === 0) {
+            wall.position.z = i === 0 ? -GAME_CONSTANTS.ARENA_SIZE / 2 : GAME_CONSTANTS.ARENA_SIZE / 2;
+        } else {
+            wall.rotation.y = Math.PI / 2;
+            wall.position.x = i === 1 ? GAME_CONSTANTS.ARENA_SIZE / 2 : -GAME_CONSTANTS.ARENA_SIZE / 2;
+        }
+        walls.push(wall);
+        scene.add(wall);
+    }
 
-    // Pared sur
-    const wallSouth = createWall(wallMaterial);
-    wallSouth.position.z = GAME_CONSTANTS.ARENA_SIZE / 2;
-    scene.add(wallSouth);
+    // Añadir árboles aleatorios
+    for (let i = 0; i < GAME_CONSTANTS.NUM_TREES; i++) {
+        const x = (Math.random() - 0.5) * (GAME_CONSTANTS.ARENA_SIZE - 5);
+        const z = (Math.random() - 0.5) * (GAME_CONSTANTS.ARENA_SIZE - 5);
+        const tree = createTree(x, z);
+        scene.add(tree);
+    }
 
-    // Pared este
-    const wallEast = createWall(wallMaterial);
-    wallEast.rotation.y = Math.PI / 2;
-    wallEast.position.x = GAME_CONSTANTS.ARENA_SIZE / 2;
-    scene.add(wallEast);
+    // Añadir rocas aleatorias
+    for (let i = 0; i < GAME_CONSTANTS.NUM_ROCKS; i++) {
+        const x = (Math.random() - 0.5) * (GAME_CONSTANTS.ARENA_SIZE - 3);
+        const z = (Math.random() - 0.5) * (GAME_CONSTANTS.ARENA_SIZE - 3);
+        const rock = createRock(x, z);
+        scene.add(rock);
+    }
 
-    // Pared oeste
-    const wallWest = createWall(wallMaterial);
-    wallWest.rotation.y = Math.PI / 2;
-    wallWest.position.x = -GAME_CONSTANTS.ARENA_SIZE / 2;
-    scene.add(wallWest);
+    // Añadir efecto de neón en las esquinas
+    const neonGeometry = new THREE.BoxGeometry(GAME_CONSTANTS.ARENA_SIZE, 0.1, 0.1);
+    const neonMaterial = new THREE.MeshBasicMaterial({ 
+        color: 0x00ffff,
+        emissive: 0x00ffff,
+        emissiveIntensity: 1
+    });
+    
+    const neonLines = [];
+    for (let i = 0; i < 4; i++) {
+        const neon = new THREE.Mesh(neonGeometry, neonMaterial);
+        neon.position.y = GAME_CONSTANTS.WALL_HEIGHT;
+        neon.rotation.y = (Math.PI / 2) * i;
+        if (i % 2 === 0) {
+            neon.position.z = i === 0 ? -GAME_CONSTANTS.ARENA_SIZE / 2 : GAME_CONSTANTS.ARENA_SIZE / 2;
+        } else {
+            neon.position.x = i === 1 ? GAME_CONSTANTS.ARENA_SIZE / 2 : -GAME_CONSTANTS.ARENA_SIZE / 2;
+        }
+        scene.add(neon);
+        neonLines.push(neon);
+    }
 }
 
 function createWall(material) {
@@ -143,31 +259,69 @@ function setupControls() {
 }
 
 function createPlayer(id, position) {
-    const geometry = new THREE.BoxGeometry(GAME_CONSTANTS.PLAYER_SIZE, GAME_CONSTANTS.PLAYER_SIZE * 2, GAME_CONSTANTS.PLAYER_SIZE);
-    const material = new THREE.MeshStandardMaterial({ color: id === myId ? 0x00ff00 : 0xff0000 });
-    const player = new THREE.Mesh(geometry, material);
+    // Grupo para el jugador
+    const playerGroup = new THREE.Group();
+
+    // Cuerpo
+    const bodyGeometry = new THREE.CapsuleGeometry(0.5, 1, 4, 8);
+    const bodyMaterial = new THREE.MeshStandardMaterial({ 
+        color: id === myId ? 0x00ff88 : 0xff4444,
+        metalness: 0.7,
+        roughness: 0.3
+    });
+    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    body.castShadow = true;
+    playerGroup.add(body);
+
+    // Visor
+    const visorGeometry = new THREE.BoxGeometry(0.7, 0.3, 0.3);
+    const visorMaterial = new THREE.MeshPhysicalMaterial({
+        color: 0x88ffff,
+        metalness: 1,
+        roughness: 0,
+        transparent: true,
+        opacity: 0.8
+    });
+    const visor = new THREE.Mesh(visorGeometry, visorMaterial);
+    visor.position.y = 0.5;
+    visor.position.z = 0.3;
+    playerGroup.add(visor);
+
+    // Luz del jugador
+    const playerLight = new THREE.PointLight(id === myId ? 0x00ff88 : 0xff4444, 1, 3);
+    playerLight.position.y = 1;
+    playerGroup.add(playerLight);
+
+    playerGroup.position.copy(position);
+    scene.add(playerGroup);
     
-    player.position.copy(position);
-    player.castShadow = true;
-    player.receiveShadow = true;
-    
-    scene.add(player);
     players[id] = {
-        mesh: player,
+        mesh: playerGroup,
         health: GAME_CONSTANTS.MAX_HEALTH,
         score: 0
     };
     
     if (id === myId) {
-        camera.position.set(0, GAME_CONSTANTS.PLAYER_SIZE * 3, GAME_CONSTANTS.PLAYER_SIZE * 4);
-        player.add(camera);
+        // Cámara en tercera persona
+        camera.position.set(0, 3, 6);
+        playerGroup.add(camera);
     }
+
+    return playerGroup;
 }
 
 function createBullet(position, direction) {
     const geometry = new THREE.SphereGeometry(GAME_CONSTANTS.BULLET_SIZE / 2);
-    const material = new THREE.MeshStandardMaterial({ color: 0xffff00, emissive: 0xffff00, emissiveIntensity: 0.5 });
+    const material = new THREE.MeshStandardMaterial({ 
+        color: 0xffff00, 
+        emissive: 0xffff00, 
+        emissiveIntensity: 1
+    });
     const bullet = new THREE.Mesh(geometry, material);
+    
+    // Añadir luz a la bala
+    const bulletLight = new THREE.PointLight(0xffff00, 1, 2);
+    bullet.add(bulletLight);
     
     bullet.position.copy(position);
     bullet.direction = direction;
