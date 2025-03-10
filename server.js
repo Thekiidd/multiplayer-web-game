@@ -140,35 +140,42 @@ io.on('connection', (socket) => {
             player.isDead = true;
             player.health = 0;
             player.bullets = [];
+            player.killStreak = 0;
 
             // Incrementar el puntaje del asesino si existe
             if (data.killerId && players.has(data.killerId)) {
                 const killer = players.get(data.killerId);
-                killer.score = (killer.score || 0) + 2; // Aumentado a 2 puntos por muerte
+                killer.score = (killer.score || 0) + 2; // Base score por muerte
                 
-                // Bonus por racha de muertes
-                if (killer.killStreak) {
-                    killer.killStreak++;
-                    if (killer.killStreak >= 3) {
-                        killer.score++; // Punto extra por racha de 3 o más
-                    }
-                } else {
-                    killer.killStreak = 1;
+                // Sistema de racha de muertes
+                if (!killer.killStreak) killer.killStreak = 0;
+                killer.killStreak++;
+                
+                // Bonus por racha
+                if (killer.killStreak >= 3) {
+                    killer.score++; // Punto extra por racha
                 }
-            }
 
-            // Resetear la racha de muertes del jugador que murió
-            if (player.killStreak) {
-                player.killStreak = 0;
-            }
+                // Emitir evento con información actualizada
+                io.emit('playerDied', {
+                    id: data.id,
+                    killerId: data.killerId,
+                    killerScore: killer.score,
+                    killStreak: killer.killStreak
+                });
 
-            // Emitir evento con información actualizada
-            io.emit('playerDied', {
-                id: data.id,
-                killerId: data.killerId,
-                killerScore: data.killerId && players.has(data.killerId) ? players.get(data.killerId).score : null,
-                killStreak: data.killerId && players.has(data.killerId) ? players.get(data.killerId).killStreak : 0
-            });
+                // Emitir actualización inmediata del asesino
+                io.emit('playerMoved', {
+                    id: data.killerId,
+                    x: killer.x,
+                    y: killer.y,
+                    name: killer.name,
+                    score: killer.score,
+                    health: killer.health,
+                    isDead: killer.isDead,
+                    killStreak: killer.killStreak
+                });
+            }
         }
     });
 

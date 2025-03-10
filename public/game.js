@@ -804,19 +804,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Actualizar el puntaje y racha del asesino desde el servidor
                 if (data.killerId && players.has(data.killerId)) {
                     const killer = players.get(data.killerId);
-                    killer.score = data.killerScore;
-                    killer.killStreak = data.killStreak;
+                    killer.score = data.killerScore || killer.score + 2; // Asegurar que se actualice el puntaje
+                    killer.killStreak = data.killStreak || 1;
                     
                     // Mostrar mensaje de racha si es 3 o más
-                    if (data.killStreak >= 3) {
+                    if (killer.killStreak >= 3) {
                         const killMessage = document.createElement('div');
                         killMessage.className = 'kill-streak-message';
-                        killMessage.textContent = `¡${killer.name} está en racha! (${data.killStreak} muertes)`;
+                        killMessage.textContent = `¡${killer.name} está en racha! (${killer.killStreak} muertes)`;
                         document.body.appendChild(killMessage);
                         setTimeout(() => killMessage.remove(), 3000);
                     }
                     
-                    updateScoreboard();
+                    updateScoreboard(); // Actualizar el marcador inmediatamente
                 }
             }
         });
@@ -848,11 +848,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 x: Math.round(player.x),
                 y: Math.round(player.y),
                 name: player.name,
-                score: player.score,
+                score: player.score || 0, // Asegurar que score nunca sea undefined
                 health: player.health,
                 isDead: player.isDead,
                 bullets: player.bullets.map(b => ({ x: Math.round(b.x), y: Math.round(b.y), angle: b.angle })).slice(-5),
-                powers: { hasShield: player.hasShield, damageMultiplier: player.damageMultiplier, speed: player.speed }
+                powers: { hasShield: player.hasShield, damageMultiplier: player.damageMultiplier, speed: player.speed },
+                killStreak: player.killStreak || 0 // Añadir killStreak a los datos enviados
             };
             if (player.avatarUrl !== player._lastSentAvatarUrl) {
                 minimalData.avatarUrl = player.avatarUrl;
