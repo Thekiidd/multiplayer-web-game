@@ -13,6 +13,12 @@ let shootCooldown = false;
 let lastShootTime = 0;
 const SHOOT_COOLDOWN = 250;
 
+// Añadir variables para el control de la cámara
+let cameraRotation = {
+    x: 0,
+    y: 0
+};
+
 // Constantes del juego
 const GAME_CONSTANTS = {
     PLAYER_SPEED: 0.15,
@@ -124,6 +130,11 @@ function init() {
     // Posicionar la cámara inicialmente
     camera.position.set(0, 10, 20);
     camera.lookAt(0, 0, 0);
+
+    // Bloquear el puntero del ratón para el control de la cámara
+    renderer.domElement.addEventListener('click', () => {
+        renderer.domElement.requestPointerLock();
+    });
 
     // Iniciar el bucle de renderizado
     animate();
@@ -299,10 +310,10 @@ function createPlayer(id, position) {
         score: 0
     };
     
-    // Ajustar la cámara para el jugador local
+    // Ajustar la cámara para el jugador local en primera persona
     if (id === myId) {
-        camera.position.set(0, 5, 8);
-        camera.lookAt(playerGroup.position);
+        camera.position.set(0, 1.7, 0); // Altura de los ojos
+        playerGroup.add(camera);
     }
 
     return playerGroup;
@@ -360,16 +371,24 @@ function onWindowResize() {
 
 function onMouseMove(event) {
     if (players[myId]) {
-        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        // Calcular el cambio en la rotación basado en el movimiento del ratón
+        const movementX = event.movementX || 0;
+        const movementY = event.movementY || 0;
         
-        raycaster.setFromCamera(mouse, camera);
-        const intersects = raycaster.intersectObjects(scene.children);
+        // Actualizar la rotación de la cámara
+        cameraRotation.y -= movementX * 0.002;
+        cameraRotation.x -= movementY * 0.002;
         
-        if (intersects.length > 0) {
-            const point = intersects[0].point;
-            players[myId].mesh.lookAt(point);
-        }
+        // Limitar la rotación vertical para evitar dar la vuelta completa
+        cameraRotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, cameraRotation.x));
+        
+        // Aplicar la rotación a la cámara
+        camera.rotation.order = 'YXZ';
+        camera.rotation.x = cameraRotation.x;
+        camera.rotation.y = cameraRotation.y;
+        
+        // Rotar el cuerpo del jugador solo en el eje Y
+        players[myId].mesh.rotation.y = cameraRotation.y;
     }
 }
 
@@ -530,6 +549,11 @@ function animate() {
             moveVector.normalize();
             moveVector.multiplyScalar(moveSpeed);
             
+            // Rotar el vector de movimiento según la rotación de la cámara
+            const rotationMatrix = new THREE.Matrix4();
+            rotationMatrix.makeRotationY(cameraRotation.y);
+            moveVector.applyMatrix4(rotationMatrix);
+            
             // Aplicar movimiento
             player.position.x += moveVector.x;
             player.position.z += moveVector.z;
@@ -538,21 +562,6 @@ function animate() {
             player.position.x = Math.max(-GAME_CONSTANTS.ARENA_SIZE/2 + 2, Math.min(GAME_CONSTANTS.ARENA_SIZE/2 - 2, player.position.x));
             player.position.z = Math.max(-GAME_CONSTANTS.ARENA_SIZE/2 + 2, Math.min(GAME_CONSTANTS.ARENA_SIZE/2 - 2, player.position.z));
         }
-        
-        // Actualizar posición de la cámara en tercera persona
-        const idealOffset = new THREE.Vector3(0, 5, 8);
-        const idealLookat = new THREE.Vector3(0, 0, 0);
-        
-        // Transformar el offset ideal al espacio del mundo
-        const offset = idealOffset.clone();
-        offset.add(player.position);
-        
-        // Suavizar el movimiento de la cámara
-        camera.position.lerp(offset, 0.1);
-        
-        // Punto de mira
-        const target = player.position.clone().add(idealLookat);
-        camera.lookAt(target);
     }
     
     updateBullets();
