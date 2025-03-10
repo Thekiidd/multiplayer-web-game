@@ -29,7 +29,9 @@ const playerLastActivity = new Map();
 const GAME_CONSTANTS = {
     MAP_WIDTH: 3000,
     MAP_HEIGHT: 2000,
-    UPDATE_RATE: 1000 / 30
+    UPDATE_RATE: 1000 / 30,
+    SHOT_COOLDOWN: 250,
+    MAX_LATENCY_COMPENSATION: 100
 };
 
 function cleanupData() {
@@ -81,6 +83,16 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public/index.html'));
 });
 
+// Sistema de validación de tiempo
+function getServerTime() {
+    return Date.now();
+}
+
+// Enviar tiempo del servidor periódicamente
+setInterval(() => {
+    io.emit('serverTime', { serverTime: getServerTime() });
+}, 5000);
+
 io.on('connection', (socket) => {
     if (players.size >= MEMORY_LIMITS.MAX_PLAYERS) {
         socket.emit('serverFull');
@@ -95,6 +107,9 @@ io.on('connection', (socket) => {
         id: playerId,
         players: Array.from(players.entries()).map(([id, data]) => createUpdateData(data, id))
     });
+
+    // Enviar tiempo inicial al cliente
+    socket.emit('serverTime', { serverTime: getServerTime() });
 
     socket.on('disconnect', () => {
         players.delete(playerId);
@@ -196,7 +211,33 @@ io.on('connection', (socket) => {
         
         const player = players.get(playerId);
         if (player && !player.isDead) {
-            socket.broadcast.emit('playerShoot', { id: playerId, x: data.x, y: data.y });
+            // Validar el tiempo del disparo
+            const serverTime = getServerTime();
+            const timeDiff = Math.abs(serverTime - data.timestamp);
+            
+            if (timeDiff <= GAME_CONSTANTS.MAX_LATENCY_COMPENSATION) {
+                // El disparo es válido
+                socket.broadcast.emit('playerShoot', {
+                    id: playerId,
+                    x: data.x,
+                    y: data.y,
+                    timestamp: serverTime
+                });
+
+                // Confirmar al cliente
+                socket.emit('shotValidation', {
+                    shotId: data.shotId,
+                    valid: true,
+                    serverTime: serverTime
+                });
+            } else {
+                // El disparo es inválido debido a alta latencia
+                socket.emit('shotValidation', {
+                    shotId: data.shotId,
+                    valid: false,
+                    serverTime: serverTime
+                });
+            }
         }
     });
 

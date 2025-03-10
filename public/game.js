@@ -78,6 +78,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     let lastEmitTime = 0; // Añadido para evitar error en gameLoop
 
+    // Variables para control de latencia
+    let lastServerTime = 0;
+    let serverTimeOffset = 0;
+    let clientPredictions = new Map();
+
     // Mostrar controles móviles si es un dispositivo móvil
     if (isMobile) {
         mobileControls.style.display = 'block';
@@ -85,16 +90,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Sistema de sonidos
     const sounds = {
-        shoot: new Audio('https://assets.mixkit.co/active_storage/sfx/2771/2771-preview.mp3'),
-        explosion: new Audio('https://assets.mixkit.co/active_storage/sfx/1234/1234-preview.mp3'),
-        respawn: new Audio('https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3')
+        shoot: new Audio('https://assets.mixkit.co/active_storage/sfx/2014/2014-preview.mp3'),
+        explosion: new Audio('https://assets.mixkit.co/active_storage/sfx/1236/1236-preview.mp3'),
+        respawn: new Audio('https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3'),
+        powerUp: new Audio('https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3'),
+        killStreak: new Audio('https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3'),
+        backgroundMusic: new Audio('https://assets.mixkit.co/active_storage/sfx/123/123-preview.mp3')
     };
+
+    // Configurar música de fondo
+    sounds.backgroundMusic.loop = true;
+    sounds.backgroundMusic.volume = 0.3;
 
     function playSound(soundName) {
         if (sounds[soundName]) {
-            sounds[soundName].currentTime = 0;
-            sounds[soundName].play().catch(e => console.log('Error playing sound:', e));
+            if (soundName === 'backgroundMusic') {
+                sounds[soundName].play().catch(e => console.log('Error playing background music:', e));
+            } else {
+                sounds[soundName].currentTime = 0;
+                sounds[soundName].play().catch(e => console.log('Error playing sound:', e));
+            }
         }
+    }
+
+    // Función para detener la música de fondo
+    function stopBackgroundMusic() {
+        if (sounds.backgroundMusic) {
+            sounds.backgroundMusic.pause();
+            sounds.backgroundMusic.currentTime = 0;
+        }
+    }
+
+    // Iniciar música de fondo cuando comienza el juego
+    function startBackgroundMusic() {
+        playSound('backgroundMusic');
     }
 
     const camera = {
@@ -203,7 +232,9 @@ document.addEventListener('DOMContentLoaded', () => {
         POWER_DURATION: 10000,
         POWER_SPAWN_INTERVAL: 15000,
         SYNC_RATE: 16,
-        INTERPOLATION_DELAY: 50
+        INTERPOLATION_DELAY: 50,
+        SHOT_COOLDOWN: 250, // Tiempo fijo entre disparos
+        MAX_LATENCY_COMPENSATION: 100 // Máxima compensación de latencia permitida
     };
 
     // Sistema de poderes
@@ -282,15 +313,17 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.stroke();
         }
 
-        update() {
+        update(deltaTime = 16.67) {
             this.trail.push({x: this.x, y: this.y});
             if (this.trail.length > 5) {
                 this.trail.shift();
             }
 
-            this.x += Math.cos(this.angle) * this.speed;
-            this.y += Math.sin(this.angle) * this.speed;
-            this.distance += this.speed;
+            // Normalizar la velocidad de la bala basada en deltaTime
+            const normalizedSpeed = (this.speed * deltaTime) / 16.67;
+            this.x += Math.cos(this.angle) * normalizedSpeed;
+            this.y += Math.sin(this.angle) * normalizedSpeed;
+            this.distance += normalizedSpeed;
 
             return this.distance < this.maxDistance &&
                    this.x > 0 && this.x < camera.mapWidth &&
@@ -335,7 +368,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const dy = player.y - this.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
             
-            return distance < player.size + this.size;
+            if (distance < player.size + this.size) {
+                playSound('powerUp');
+                return true;
+            }
+            return false;
         }
     }
 
@@ -375,6 +412,7 @@ document.addEventListener('DOMContentLoaded', () => {
             this.damageMultiplier = 1;
             this.baseSpeed = GAME_CONSTANTS.PLAYER_SPEED;
             this.killStreak = 0;
+            this.lastUpdate = null;
         }
 
         draw() {
@@ -508,6 +546,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
+            const now = Date.now();
+            const deltaTime = Math.min(16.67, now - (this.lastUpdate || now)); // Máximo 60 FPS
+            this.lastUpdate = now;
+
             let dx = 0;
             let dy = 0;
 
@@ -515,7 +557,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 dx = moveJoystick.data.x * this.speed;
                 dy = moveJoystick.data.y * this.speed;
             } else {
-                // Usar el nuevo sistema de verificación de teclas
                 if (isKeyPressed('ArrowLeft') || isKeyPressed('a')) dx -= this.speed;
                 if (isKeyPressed('ArrowRight') || isKeyPressed('d')) dx += this.speed;
                 if (isKeyPressed('ArrowUp') || isKeyPressed('w')) dy -= this.speed;
@@ -528,13 +569,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 dy *= factor;
             }
 
+            // Normalizar el movimiento basado en deltaTime
+            const moveSpeed = (this.speed * deltaTime) / 16.67;
+            dx = dx * moveSpeed / this.speed;
+            dy = dy * moveSpeed / this.speed;
+
             this.x += dx;
             this.y += dy;
 
             this.x = Math.max(this.size, Math.min(camera.mapWidth - this.size, this.x));
             this.y = Math.max(this.size, Math.min(camera.mapHeight - this.size, this.y));
 
-            this.bullets = this.bullets.filter(bullet => bullet.update());
+            // Actualizar balas con deltaTime
+            this.bullets = this.bullets.filter(bullet => {
+                bullet.update(deltaTime);
+                return bullet.distance < bullet.maxDistance &&
+                       bullet.x > 0 && bullet.x < camera.mapWidth &&
+                       bullet.y > 0 && bullet.y < camera.mapHeight;
+            });
         }
 
         setAvatar(imageUrl) {
@@ -644,11 +696,31 @@ document.addEventListener('DOMContentLoaded', () => {
         if (myId && players.has(myId)) {
             const player = players.get(myId);
             const now = Date.now();
-            if (!player.isDead && now - lastAutoShot >= AUTO_SHOT_DELAY) {
+            const serverTime = now + serverTimeOffset;
+
+            if (!player.isDead && now - lastAutoShot >= GAME_CONSTANTS.SHOT_COOLDOWN) {
                 const x = mouseX + camera.x;
                 const y = mouseY + camera.y;
+                
+                // Predicción del cliente
                 player.shoot(x, y);
-                socket.emit('playerShoot', { x, y });
+                
+                // Guardar la predicción
+                const shotId = now.toString();
+                clientPredictions.set(shotId, {
+                    time: now,
+                    x: x,
+                    y: y
+                });
+
+                // Enviar al servidor con timestamp
+                socket.emit('playerShoot', {
+                    x: x,
+                    y: y,
+                    timestamp: serverTime,
+                    shotId: shotId
+                });
+
                 lastAutoShot = now;
             }
         }
@@ -710,6 +782,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         menuInicial.style.display = 'none';
         gameContainer.style.display = 'block';
+        startBackgroundMusic();
         
         if (socket) socket.disconnect();
         
@@ -835,6 +908,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         killMessage.textContent = `¡${killer.name} está en racha! (${killer.killStreak} muertes)`;
                         document.body.appendChild(killMessage);
                         setTimeout(() => killMessage.remove(), 3000);
+                        playSound('killStreak');
                     }
                     
                     updateScoreboard(); // Actualizar el marcador inmediatamente
@@ -868,6 +942,26 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     
+        socket.on('serverTime', (data) => {
+            const now = Date.now();
+            serverTimeOffset = data.serverTime - now;
+            lastServerTime = data.serverTime;
+        });
+
+        socket.on('shotValidation', (data) => {
+            if (clientPredictions.has(data.shotId)) {
+                const prediction = clientPredictions.get(data.shotId);
+                const latency = Date.now() - prediction.time;
+                
+                // Ajustar la compensación de latencia si es necesario
+                if (latency > GAME_CONSTANTS.MAX_LATENCY_COMPENSATION) {
+                    console.log('Alta latencia detectada:', latency, 'ms');
+                }
+                
+                clientPredictions.delete(data.shotId);
+            }
+        });
+
         gameLoop();
     }
 
@@ -1090,4 +1184,14 @@ document.addEventListener('DOMContentLoaded', () => {
             reader.readAsDataURL(file);
         }
     });
+
+    // Limpiar predicciones antiguas periódicamente
+    setInterval(() => {
+        const now = Date.now();
+        for (const [shotId, prediction] of clientPredictions.entries()) {
+            if (now - prediction.time > 1000) { // Eliminar predicciones más antiguas de 1 segundo
+                clientPredictions.delete(shotId);
+            }
+        }
+    }, 1000);
 });
