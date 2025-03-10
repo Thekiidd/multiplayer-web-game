@@ -5,10 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Juego Multijugador</title>
     <link rel="stylesheet" href="styles.css">
-    <!-- Script de Socket.IO -->
+    <!-- Three.js (se cargará condicionalmente) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Socket.IO -->
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
-    <!-- Script del juego -->
+    <!-- Scripts del juego (se cargarán condicionalmente) -->
     <script src="game.js" defer></script>
+    <script src="game3d.js" defer></script>
 </head>
 <body>
     <!-- Menú Inicial -->
@@ -16,6 +19,13 @@
         <div class="menu-contenido">
             <h1>¡Bienvenido al Juego!</h1>
             <input type="text" id="nombreJugador" class="menu-input" placeholder="Ingresa tu nombre" maxlength="15">
+            <div class="version-selector">
+                <label>Selecciona la versión:</label>
+                <div class="version-buttons">
+                    <button class="version-button selected" data-version="2d">2D</button>
+                    <button class="version-button" data-version="3d">3D (Beta)</button>
+                </div>
+            </div>
             <div class="avatar-selector">
                 <label for="playerAvatar">Selecciona tu avatar:</label>
                 <input type="file" id="playerAvatar" accept="image/*">
@@ -28,8 +38,17 @@
     <!-- Contenedor del Juego -->
     <div class="game-container" style="display: none;">
         <canvas id="gameCanvas"></canvas>
-        <div id="gameStatus">
-            Jugadores: <span id="playerCount">0</span>
+        <div id="gameUI">
+            <div id="gameStatus">
+                Jugadores: <span id="playerCount">0</span>
+            </div>
+            <div id="scoreboard">
+                <h3>🏆 Top Jugadores</h3>
+                <div id="scoreList"></div>
+            </div>
+            <div id="healthBar">
+                <div id="healthFill"></div>
+            </div>
         </div>
         
         <!-- Controles móviles -->
@@ -45,14 +64,36 @@
                 </div>
             </div>
         </div>
-
-        <!-- Chat y Scoreboard -->
-        <div id="gameUI">
-            <div id="scoreboard">
-                <h3>🏆 Top Jugadores</h3>
-                <div id="scoreList"></div>
-            </div>
-        </div>
     </div>
+
+    <!-- Crosshair -->
+    <div id="crosshair">+</div>
+
+    <script>
+        // Gestión de versiones
+        let selectedVersion = '2d';
+        const versionButtons = document.querySelectorAll('.version-button');
+        
+        versionButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                versionButtons.forEach(btn => btn.classList.remove('selected'));
+                button.classList.add('selected');
+                selectedVersion = button.dataset.version;
+            });
+        });
+
+        // Modificar el evento de inicio del juego
+        document.getElementById('botonJugar').addEventListener('click', () => {
+            if (selectedVersion === '3d') {
+                // Desactivar el script 2D y activar el 3D
+                document.querySelector('script[src="game.js"]').remove();
+                init(); // Función de inicio del juego 3D
+            } else {
+                // Desactivar el script 3D y mantener el 2D
+                document.querySelector('script[src="game3d.js"]').remove();
+                startGame(); // Función de inicio del juego 2D
+            }
+        });
+    </script>
 </body>
 </html> 
