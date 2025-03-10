@@ -606,9 +606,14 @@ document.addEventListener('DOMContentLoaded', () => {
     let isMouseDown = false;
     let lastAutoShot = 0;
     const AUTO_SHOT_DELAY = 250;
+    let mouseX = 0;
+    let mouseY = 0;
 
     canvas.addEventListener('mousedown', (e) => {
         isMouseDown = true;
+        const rect = canvas.getBoundingClientRect();
+        mouseX = e.clientX - rect.left;
+        mouseY = e.clientY - rect.top;
         handleShot(e);
     });
 
@@ -617,13 +622,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     canvas.addEventListener('mousemove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        mouseX = e.clientX - rect.left;
+        mouseY = e.clientY - rect.top;
         if (isMouseDown) handleShot(e);
         if (myId && players.has(myId)) {
             const player = players.get(myId);
             if (!player.isDead) {
-                const rect = canvas.getBoundingClientRect();
-                const mouseX = e.clientX - rect.left;
-                const mouseY = e.clientY - rect.top;
                 ctx.setLineDash([5, 5]);
                 ctx.beginPath();
                 ctx.moveTo(player.x - camera.x, player.y - camera.y);
@@ -640,9 +645,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const player = players.get(myId);
             const now = Date.now();
             if (!player.isDead && now - lastAutoShot >= AUTO_SHOT_DELAY) {
-                const rect = canvas.getBoundingClientRect();
-                const x = e.clientX - rect.left + camera.x;
-                const y = e.clientY - rect.top + camera.y;
+                const x = mouseX + camera.x;
+                const y = mouseY + camera.y;
                 player.shoot(x, y);
                 socket.emit('playerShoot', { x, y });
                 lastAutoShot = now;
@@ -885,6 +889,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (myId && players.has(myId)) {
             const myPlayer = players.get(myId);
             myPlayer.update(keys);
+            
+            // Añadir disparo automático mientras se mantiene presionado el mouse
+            if (isMouseDown) {
+                handleShot({ clientX: mouseX, clientY: mouseY });
+            }
             
             activePowerUps.forEach((powerUp, index) => {
                 if (!powerUp.collected && powerUp.checkCollision(myPlayer)) {
