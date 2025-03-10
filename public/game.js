@@ -11,16 +11,45 @@ document.addEventListener('DOMContentLoaded', () => {
     const ctx = canvas.getContext('2d');
     const scoreList = document.getElementById('scoreList');
 
+    // Variables para el control del juego
+    let isWindowActive = true;
+    let pressedKeys = new Set();
+
+    // Manejar cambio de foco de ventana
+    window.addEventListener('blur', () => {
+        isWindowActive = false;
+        // Limpiar teclas presionadas cuando se pierde el foco
+        pressedKeys.clear();
+    });
+
+    window.addEventListener('focus', () => {
+        isWindowActive = true;
+    });
+
+    // Nuevo sistema de manejo de teclas
+    window.addEventListener('keydown', (e) => {
+        const key = e.key.toLowerCase();
+        if (keysToPrevent.includes(key) && gameContainer.style.display !== 'none') {
+            e.preventDefault();
+            pressedKeys.add(key);
+        }
+    });
+
+    window.addEventListener('keyup', (e) => {
+        const key = e.key.toLowerCase();
+        pressedKeys.delete(key);
+    });
+
+    // Función para verificar si una tecla está presionada
+    function isKeyPressed(key) {
+        return isWindowActive && pressedKeys.has(key.toLowerCase());
+    }
+
     // Prevenir comportamientos por defecto del navegador
     document.addEventListener('contextmenu', (e) => e.preventDefault());
     
     // Prevenir scroll y otros comportamientos al presionar teclas
     const keysToPrevent = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'w', 'a', 's', 'd'];
-    document.addEventListener('keydown', (e) => {
-        if (keysToPrevent.includes(e.key.toLowerCase()) && gameContainer.style.display !== 'none') {
-            e.preventDefault();
-        }
-    });
 
     // Mantener el foco en el juego
     gameContainer.addEventListener('click', () => {
@@ -482,10 +511,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 dx = moveJoystick.data.x * this.speed;
                 dy = moveJoystick.data.y * this.speed;
             } else {
-                if (keys.ArrowLeft || keys.a) dx -= this.speed;
-                if (keys.ArrowRight || keys.d) dx += this.speed;
-                if (keys.ArrowUp || keys.w) dy -= this.speed;
-                if (keys.ArrowDown || keys.s) dy += this.speed;
+                // Usar el nuevo sistema de verificación de teclas
+                if (isKeyPressed('ArrowLeft') || isKeyPressed('a')) dx -= this.speed;
+                if (isKeyPressed('ArrowRight') || isKeyPressed('d')) dx += this.speed;
+                if (isKeyPressed('ArrowUp') || isKeyPressed('w')) dy -= this.speed;
+                if (isKeyPressed('ArrowDown') || isKeyPressed('s')) dy += this.speed;
             }
 
             if (dx !== 0 && dy !== 0) {
@@ -904,17 +934,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // Verificar el tamaño (máximo 2MB)
-            if (file.size > 2 * 1024 * 1024) {
-                alert('La imagen es demasiado grande. El tamaño máximo es 2MB.');
+            // Verificar el tamaño (máximo 15MB)
+            const MAX_SIZE_MB = 15;
+            if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+                alert(`La imagen es demasiado grande. El tamaño máximo es ${MAX_SIZE_MB}MB.`);
                 return;
+            }
+
+            // Advertencia para archivos grandes
+            if (file.size > 5 * 1024 * 1024) {
+                if (!confirm('Has seleccionado una imagen grande que podría afectar el rendimiento del juego. ¿Deseas continuar?')) {
+                    return;
+                }
             }
 
             const reader = new FileReader();
             reader.onload = function(e) {
-                // Si es un GIF, usarlo directamente
+                // Si es un GIF, verificar dimensiones antes de usar
                 if (file.type === 'image/gif') {
-                    document.getElementById('avatarPreview').src = e.target.result;
+                    const img = new Image();
+                    img.onload = function() {
+                        // Si el GIF es muy grande, redimensionar el elemento que lo muestra
+                        const MAX_DISPLAY_SIZE = 100;
+                        document.getElementById('avatarPreview').style.width = MAX_DISPLAY_SIZE + 'px';
+                        document.getElementById('avatarPreview').style.height = MAX_DISPLAY_SIZE + 'px';
+                        document.getElementById('avatarPreview').src = e.target.result;
+                    };
+                    img.src = e.target.result;
                     return;
                 }
 
@@ -951,6 +997,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Convertir a JPEG con calidad reducida
                     const optimizedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
                     document.getElementById('avatarPreview').src = optimizedDataUrl;
+                    document.getElementById('avatarPreview').style.width = width + 'px';
+                    document.getElementById('avatarPreview').style.height = height + 'px';
                 };
                 img.src = e.target.result;
             };
