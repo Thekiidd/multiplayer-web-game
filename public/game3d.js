@@ -262,12 +262,11 @@ function createPlayer(id, position) {
     // Grupo para el jugador
     const playerGroup = new THREE.Group();
 
-    // Cuerpo
-    const bodyGeometry = new THREE.CapsuleGeometry(0.5, 1, 4, 8);
-    const bodyMaterial = new THREE.MeshStandardMaterial({ 
+    // Cuerpo (usando CylinderGeometry en lugar de CapsuleGeometry)
+    const bodyGeometry = new THREE.CylinderGeometry(0.5, 0.5, 2, 16);
+    const bodyMaterial = new THREE.MeshPhongMaterial({ 
         color: id === myId ? 0x00ff88 : 0xff4444,
-        metalness: 0.7,
-        roughness: 0.3
+        shininess: 70
     });
     const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
     body.castShadow = true;
@@ -275,10 +274,9 @@ function createPlayer(id, position) {
 
     // Visor
     const visorGeometry = new THREE.BoxGeometry(0.7, 0.3, 0.3);
-    const visorMaterial = new THREE.MeshPhysicalMaterial({
+    const visorMaterial = new THREE.MeshPhongMaterial({
         color: 0x88ffff,
-        metalness: 1,
-        roughness: 0,
+        shininess: 90,
         transparent: true,
         opacity: 0.8
     });
@@ -301,10 +299,10 @@ function createPlayer(id, position) {
         score: 0
     };
     
+    // Ajustar la cámara para el jugador local
     if (id === myId) {
-        // Cámara en tercera persona
-        camera.position.set(0, 3, 6);
-        playerGroup.add(camera);
+        camera.position.set(0, 5, 8);
+        camera.lookAt(playerGroup.position);
     }
 
     return playerGroup;
@@ -312,10 +310,10 @@ function createPlayer(id, position) {
 
 function createBullet(position, direction) {
     const geometry = new THREE.SphereGeometry(GAME_CONSTANTS.BULLET_SIZE / 2);
-    const material = new THREE.MeshStandardMaterial({ 
-        color: 0xffff00, 
-        emissive: 0xffff00, 
-        emissiveIntensity: 1
+    const material = new THREE.MeshPhongMaterial({ 
+        color: 0xffff00,
+        shininess: 100,
+        emissive: 0xffff00
     });
     const bullet = new THREE.Mesh(geometry, material);
     
@@ -516,28 +514,48 @@ function animate() {
     requestAnimationFrame(animate);
     
     if (players[myId]) {
-        // Actualizar posición del jugador basado en controles
         const player = players[myId].mesh;
         const moveSpeed = controls.run ? GAME_CONSTANTS.PLAYER_SPEED * 2 : GAME_CONSTANTS.PLAYER_SPEED;
         
-        if (controls.moveForward) player.position.z -= moveSpeed;
-        if (controls.moveBackward) player.position.z += moveSpeed;
-        if (controls.moveLeft) player.position.x -= moveSpeed;
-        if (controls.moveRight) player.position.x += moveSpeed;
+        // Vector de movimiento basado en la dirección de la cámara
+        const moveVector = new THREE.Vector3();
         
-        // Limitar posición dentro de la arena
-        player.position.x = Math.max(-GAME_CONSTANTS.ARENA_SIZE/2 + 2, Math.min(GAME_CONSTANTS.ARENA_SIZE/2 - 2, player.position.x));
-        player.position.z = Math.max(-GAME_CONSTANTS.ARENA_SIZE/2 + 2, Math.min(GAME_CONSTANTS.ARENA_SIZE/2 - 2, player.position.z));
+        if (controls.moveForward) moveVector.z -= 1;
+        if (controls.moveBackward) moveVector.z += 1;
+        if (controls.moveLeft) moveVector.x -= 1;
+        if (controls.moveRight) moveVector.x += 1;
         
-        // Actualizar posición de la cámara
-        camera.position.copy(player.position);
-        camera.position.y = 5;
-        camera.position.z += 8;
-        camera.lookAt(player.position);
+        // Normalizar el vector si hay movimiento diagonal
+        if (moveVector.length() > 0) {
+            moveVector.normalize();
+            moveVector.multiplyScalar(moveSpeed);
+            
+            // Aplicar movimiento
+            player.position.x += moveVector.x;
+            player.position.z += moveVector.z;
+            
+            // Limitar posición dentro de la arena
+            player.position.x = Math.max(-GAME_CONSTANTS.ARENA_SIZE/2 + 2, Math.min(GAME_CONSTANTS.ARENA_SIZE/2 - 2, player.position.x));
+            player.position.z = Math.max(-GAME_CONSTANTS.ARENA_SIZE/2 + 2, Math.min(GAME_CONSTANTS.ARENA_SIZE/2 - 2, player.position.z));
+        }
+        
+        // Actualizar posición de la cámara en tercera persona
+        const idealOffset = new THREE.Vector3(0, 5, 8);
+        const idealLookat = new THREE.Vector3(0, 0, 0);
+        
+        // Transformar el offset ideal al espacio del mundo
+        const offset = idealOffset.clone();
+        offset.add(player.position);
+        
+        // Suavizar el movimiento de la cámara
+        camera.position.lerp(offset, 0.1);
+        
+        // Punto de mira
+        const target = player.position.clone().add(idealLookat);
+        camera.lookAt(target);
     }
     
     updateBullets();
-    
     renderer.render(scene, camera);
 }
 
