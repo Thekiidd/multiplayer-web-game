@@ -340,7 +340,6 @@ body {
 img {
     pointer-events: none;
     -webkit-user-drag: none;
-    user-drag: none;
     -ms-user-select: none;
     -moz-user-select: none;
     -webkit-user-select: none;

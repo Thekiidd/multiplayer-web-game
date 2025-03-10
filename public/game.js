@@ -90,17 +90,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Sistema de sonidos
     const sounds = {
-        shoot: new Audio('https://assets.mixkit.co/active_storage/sfx/2014/2014-preview.mp3'),
-        explosion: new Audio('https://assets.mixkit.co/active_storage/sfx/1236/1236-preview.mp3'),
-        respawn: new Audio('https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3'),
+        shoot: new Audio('https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3'),
+        explosion: new Audio('https://assets.mixkit.co/active_storage/sfx/1997/1997-preview.mp3'),
+        respawn: new Audio('https://assets.mixkit.co/active_storage/sfx/2020/2020-preview.mp3'),
         powerUp: new Audio('https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3'),
         killStreak: new Audio('https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3'),
-        backgroundMusic: new Audio('https://assets.mixkit.co/active_storage/sfx/123/123-preview.mp3')
+        backgroundMusic: new Audio('https://assets.mixkit.co/active_storage/sfx/2666/2666-preview.mp3')
     };
 
-    // Configurar música de fondo
+    // Configurar volúmenes de sonido
     sounds.backgroundMusic.loop = true;
-    sounds.backgroundMusic.volume = 0.3;
+    sounds.backgroundMusic.volume = 0.2;
+    sounds.shoot.volume = 0.3;
+    sounds.explosion.volume = 0.4;
+    sounds.respawn.volume = 0.4;
+    sounds.powerUp.volume = 0.4;
+    sounds.killStreak.volume = 0.5;
 
     function playSound(soundName) {
         if (sounds[soundName]) {
@@ -223,18 +228,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Constantes del juego
     const GAME_CONSTANTS = {
-        PLAYER_SPEED: 5,
-        PLAYER_SIZE: 30,
-        BULLET_SPEED: 30,
-        BULLET_SIZE: 8,
-        BULLET_DAMAGE: 35,
+        PLAYER_SPEED: 6,
+        PLAYER_SIZE: 35,
+        BULLET_SPEED: 25,
+        BULLET_SIZE: 10,
+        BULLET_DAMAGE: 25,
         PLAYER_MAX_HEALTH: 100,
-        POWER_DURATION: 10000,
-        POWER_SPAWN_INTERVAL: 15000,
+        POWER_DURATION: 15000,
+        POWER_SPAWN_INTERVAL: 10000,
         SYNC_RATE: 16,
         INTERPOLATION_DELAY: 50,
-        SHOT_COOLDOWN: 250, // Tiempo fijo entre disparos
-        MAX_LATENCY_COMPENSATION: 100 // Máxima compensación de latencia permitida
+        SHOT_COOLDOWN: 300,
+        MAX_LATENCY_COMPENSATION: 100
     };
 
     // Sistema de poderes
@@ -243,7 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
             name: 'Velocidad',
             color: '#00ff00',
             apply: (player) => {
-                player.speed = GAME_CONSTANTS.PLAYER_SPEED * 1.5;
+                player.speed = GAME_CONSTANTS.PLAYER_SPEED * 1.7;
             },
             remove: (player) => {
                 player.speed = GAME_CONSTANTS.PLAYER_SPEED;
@@ -254,6 +259,7 @@ document.addEventListener('DOMContentLoaded', () => {
             color: '#0000ff',
             apply: (player) => {
                 player.hasShield = true;
+                player.health = Math.min(player.health + 25, GAME_CONSTANTS.PLAYER_MAX_HEALTH);
             },
             remove: (player) => {
                 player.hasShield = false;
@@ -263,7 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
             name: 'Daño x2',
             color: '#ff0000',
             apply: (player) => {
-                player.damageMultiplier = 2;
+                player.damageMultiplier = 1.75;
             },
             remove: (player) => {
                 player.damageMultiplier = 1;
@@ -386,6 +392,120 @@ document.addEventListener('DOMContentLoaded', () => {
         activePowerUps.push(new PowerUp(x, y, randomType));
     }
     setInterval(spawnPowerUp, GAME_CONSTANTS.POWER_SPAWN_INTERVAL);
+
+    // Clase Obstacle
+    class Obstacle {
+        constructor(x, y, width, height, type = 'box') {
+            this.x = x;
+            this.y = y;
+            this.width = width;
+            this.height = height;
+            this.type = type;
+            this.color = '#555555';
+            this.health = 100;
+            this.maxHealth = 100;
+            this.isDestructible = false;
+        }
+
+        draw() {
+            const screenX = this.x - camera.x;
+            const screenY = this.y - camera.y;
+
+            ctx.fillStyle = this.color;
+            if (this.type === 'box') {
+                ctx.fillRect(screenX, screenY, this.width, this.height);
+                
+                // Efecto de sombreado
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                ctx.fillRect(screenX + 5, screenY + 5, this.width, this.height);
+                
+                // Borde
+                ctx.strokeStyle = '#666666';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(screenX, screenY, this.width, this.height);
+            } else if (this.type === 'circle') {
+                ctx.beginPath();
+                ctx.arc(screenX + this.width/2, screenY + this.height/2, this.width/2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+            }
+
+            // Dibujar barra de vida si es destructible
+            if (this.isDestructible && this.health < this.maxHealth) {
+                const healthBarWidth = this.width;
+                const healthBarHeight = 5;
+                ctx.fillStyle = 'red';
+                ctx.fillRect(screenX, screenY - 10, healthBarWidth, healthBarHeight);
+                ctx.fillStyle = 'green';
+                ctx.fillRect(screenX, screenY - 10, healthBarWidth * (this.health/this.maxHealth), healthBarHeight);
+            }
+        }
+
+        checkCollision(x, y, radius) {
+            if (this.type === 'box') {
+                // Encontrar el punto más cercano del rectángulo al círculo
+                const closestX = Math.max(this.x, Math.min(x, this.x + this.width));
+                const closestY = Math.max(this.y, Math.min(y, this.y + this.height));
+                
+                // Calcular la distancia entre el círculo y el punto más cercano
+                const distanceX = x - closestX;
+                const distanceY = y - closestY;
+                
+                return (distanceX * distanceX + distanceY * distanceY) < (radius * radius);
+            } else if (this.type === 'circle') {
+                const centerX = this.x + this.width/2;
+                const centerY = this.y + this.height/2;
+                const dx = x - centerX;
+                const dy = y - centerY;
+                return (dx * dx + dy * dy) < Math.pow(this.width/2 + radius, 2);
+            }
+            return false;
+        }
+
+        takeDamage(damage) {
+            if (this.isDestructible) {
+                this.health = Math.max(0, this.health - damage);
+                return this.health <= 0;
+            }
+            return false;
+        }
+    }
+
+    // Lista de obstáculos
+    const obstacles = [];
+
+    // Función para generar obstáculos
+    function generateObstacles() {
+        // Limpiar obstáculos existentes
+        obstacles.length = 0;
+        
+        // Generar obstáculos fijos (cajas grandes indestructibles)
+        const fixedObstacles = [
+            { x: 500, y: 500, w: 200, h: 50 },
+            { x: 2000, y: 1000, w: 200, h: 50 },
+            { x: 1000, y: 1500, w: 50, h: 200 },
+            { x: 1500, y: 800, w: 50, h: 200 }
+        ];
+
+        fixedObstacles.forEach(obs => {
+            const obstacle = new Obstacle(obs.x, obs.y, obs.w, obs.h, 'box');
+            obstacle.color = '#444444';
+            obstacles.push(obstacle);
+        });
+
+        // Generar obstáculos destructibles aleatorios
+        for (let i = 0; i < 15; i++) {
+            const x = Math.random() * (camera.mapWidth - 100) + 50;
+            const y = Math.random() * (camera.mapHeight - 100) + 50;
+            const size = Math.random() * 30 + 30;
+            
+            const obstacle = new Obstacle(x, y, size, size, 
+                Math.random() > 0.5 ? 'box' : 'circle');
+            obstacle.isDestructible = true;
+            obstacle.color = '#666666';
+            obstacles.push(obstacle);
+        }
+    }
 
     // Clase Jugador
     class Player {
@@ -547,7 +667,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const now = Date.now();
-            const deltaTime = Math.min(16.67, now - (this.lastUpdate || now)); // Máximo 60 FPS
+            const deltaTime = Math.min(16.67, now - (this.lastUpdate || now));
             this.lastUpdate = now;
 
             let dx = 0;
@@ -569,24 +689,35 @@ document.addEventListener('DOMContentLoaded', () => {
                 dy *= factor;
             }
 
-            // Normalizar el movimiento basado en deltaTime
             const moveSpeed = (this.speed * deltaTime) / 16.67;
             dx = dx * moveSpeed / this.speed;
             dy = dy * moveSpeed / this.speed;
 
-            this.x += dx;
-            this.y += dy;
+            // Comprobar colisiones con obstáculos antes de mover
+            const newX = this.x + dx;
+            const newY = this.y + dy;
+            
+            let canMoveX = true;
+            let canMoveY = true;
 
+            obstacles.forEach(obstacle => {
+                if (obstacle.checkCollision(newX, this.y, this.size)) {
+                    canMoveX = false;
+                }
+                if (obstacle.checkCollision(this.x, newY, this.size)) {
+                    canMoveY = false;
+                }
+            });
+
+            if (canMoveX) this.x = newX;
+            if (canMoveY) this.y = newY;
+
+            // Mantener dentro de los límites del mapa
             this.x = Math.max(this.size, Math.min(camera.mapWidth - this.size, this.x));
             this.y = Math.max(this.size, Math.min(camera.mapHeight - this.size, this.y));
 
-            // Actualizar balas con deltaTime
-            this.bullets = this.bullets.filter(bullet => {
-                bullet.update(deltaTime);
-                return bullet.distance < bullet.maxDistance &&
-                       bullet.x > 0 && bullet.x < camera.mapWidth &&
-                       bullet.y > 0 && bullet.y < camera.mapHeight;
-            });
+            // Actualizar balas
+            this.bullets = this.bullets.filter(bullet => bullet.update(deltaTime));
         }
 
         setAvatar(imageUrl) {
@@ -743,37 +874,62 @@ document.addEventListener('DOMContentLoaded', () => {
     function checkBulletCollisions() {
         players.forEach((player, playerId) => {
             if (player.isDead) return;
+            
+            // Revisar colisiones con obstáculos
+            obstacles.forEach((obstacle, obstacleIndex) => {
+                player.bullets.forEach((bullet, bulletIndex) => {
+                    if (obstacle.checkCollision(bullet.x, bullet.y, bullet.size)) {
+                        player.bullets.splice(bulletIndex, 1);
+                        
+                        if (obstacle.isDestructible) {
+                            const destroyed = obstacle.takeDamage(bullet.damage);
+                            if (destroyed) {
+                                obstacles.splice(obstacleIndex, 1);
+                                // Efecto de explosión
+                                createExplosion(obstacle.x + obstacle.width/2, obstacle.y + obstacle.height/2);
+                            }
+                        }
+                    }
+                });
+            });
+
+            // Revisar colisiones con otros jugadores
             players.forEach((otherPlayer, otherPlayerId) => {
                 if (playerId === otherPlayerId || otherPlayer.isDead) return;
+                
                 const bulletsToRemove = [];
-                otherPlayer.bullets.forEach((bullet, bulletIndex) => {
-                    const dx = player.x - bullet.x;
-                    const dy = player.y - bullet.y;
+                player.bullets.forEach((bullet, bulletIndex) => {
+                    const dx = otherPlayer.x - bullet.x;
+                    const dy = otherPlayer.y - bullet.y;
                     const distance = Math.sqrt(dx * dx + dy * dy);
-                    if (distance < player.size + bullet.size) {
+                    
+                    if (distance < otherPlayer.size + bullet.size) {
                         bulletsToRemove.push(bulletIndex);
-                        ctx.beginPath();
-                        ctx.arc(bullet.x - camera.x, bullet.y - camera.y, 25, 0, Math.PI * 2);
-                        ctx.fillStyle = 'rgba(255, 0, 0, 0.4)';
-                        ctx.fill();
                         let finalDamage = GAME_CONSTANTS.BULLET_DAMAGE;
-                        if (otherPlayer.damageMultiplier > 1) finalDamage *= otherPlayer.damageMultiplier;
-                        player.takeDamage(finalDamage, otherPlayerId);
+                        if (player.damageMultiplier > 1) finalDamage *= player.damageMultiplier;
+                        otherPlayer.takeDamage(finalDamage, playerId);
                         
-                        // Emitir el daño inmediatamente
-                        if (socket && socket.connected && otherPlayerId === myId) {
-                            socket.emit('bulletHit', { 
-                                targetId: playerId, 
-                                damage: finalDamage, 
+                        if (socket && socket.connected && playerId === myId) {
+                            socket.emit('bulletHit', {
+                                targetId: otherPlayerId,
+                                damage: finalDamage,
                                 shooterId: myId,
-                                targetHealth: player.health
+                                targetHealth: otherPlayer.health
                             });
                         }
                     }
                 });
-                bulletsToRemove.reverse().forEach(index => otherPlayer.bullets.splice(index, 1));
+                
+                bulletsToRemove.reverse().forEach(index => player.bullets.splice(index, 1));
             });
         });
+    }
+
+    function createExplosion(x, y) {
+        ctx.beginPath();
+        ctx.arc(x - camera.x, y - camera.y, 30, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 100, 0, 0.6)';
+        ctx.fill();
     }
 
     function startGame() {
@@ -962,6 +1118,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
+        generateObstacles();
         gameLoop();
     }
 
@@ -1060,6 +1217,10 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.fillStyle = '#2a2a2a';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         drawMapGrid();
+        
+        // Dibujar obstáculos
+        obstacles.forEach(obstacle => obstacle.draw());
+        
         checkBulletCollisions();
         players.forEach(player => player.draw());
         activePowerUps.forEach(powerUp => powerUp.draw());
