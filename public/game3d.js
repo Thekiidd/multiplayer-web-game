@@ -127,9 +127,9 @@ function init() {
     // Iniciar la conexión con el servidor
     connectToServer();
 
-    // Posicionar la cámara inicialmente
-    camera.position.set(0, 10, 20);
-    camera.lookAt(0, 0, 0);
+    // Posicionar la cámara inicialmente (posición neutral hasta que el jugador se cree)
+    camera.position.set(0, 1.6, 0); // Altura aproximada de los ojos
+    camera.lookAt(0, 1.6, -1); // Mirar hacia adelante
 
     // Bloquear el puntero del ratón para el control de la cámara
     renderer.domElement.addEventListener('click', () => {
@@ -281,6 +281,12 @@ function createPlayer(id, position) {
     });
     const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
     body.castShadow = true;
+    
+    // Si es el jugador local, hacemos el cuerpo invisible
+    if (id === myId) {
+        body.visible = false;
+    }
+    
     playerGroup.add(body);
 
     // Visor
@@ -294,6 +300,12 @@ function createPlayer(id, position) {
     const visor = new THREE.Mesh(visorGeometry, visorMaterial);
     visor.position.y = 0.5;
     visor.position.z = 0.3;
+    
+    // Si es el jugador local, hacemos el visor invisible
+    if (id === myId) {
+        visor.visible = false;
+    }
+    
     playerGroup.add(visor);
 
     // Luz del jugador
@@ -312,8 +324,14 @@ function createPlayer(id, position) {
     
     // Ajustar la cámara para el jugador local en primera persona
     if (id === myId) {
-        camera.position.set(0, 1.7, 0); // Altura de los ojos
-        playerGroup.add(camera);
+        // Posicionamos la cámara en la "cabeza" del jugador
+        camera.position.copy(playerGroup.position);
+        camera.position.y += 1.6; // Altura de los ojos
+        
+        // No añadimos la cámara al grupo del jugador para evitar que rote con el modelo,
+        // ya que queremos controlar la rotación de la cámara de forma independiente
+        
+        // Actualizamos la posición de la cámara en el bucle animate()
     }
 
     return playerGroup;
@@ -562,6 +580,14 @@ function animate() {
             player.position.x = Math.max(-GAME_CONSTANTS.ARENA_SIZE/2 + 2, Math.min(GAME_CONSTANTS.ARENA_SIZE/2 - 2, player.position.x));
             player.position.z = Math.max(-GAME_CONSTANTS.ARENA_SIZE/2 + 2, Math.min(GAME_CONSTANTS.ARENA_SIZE/2 - 2, player.position.z));
         }
+        
+        // Actualizar posición de la cámara para seguir al jugador en primera persona
+        camera.position.x = player.position.x;
+        camera.position.z = player.position.z;
+        camera.position.y = player.position.y + 1.6; // Altura de los ojos
+        
+        // Ya no necesitamos usar camera.lookAt porque la dirección se controla con la rotación
+        // establecida en la función onMouseMove
     }
     
     updateBullets();
