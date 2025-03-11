@@ -1265,23 +1265,24 @@ document.addEventListener('DOMContentLoaded', () => {
         if (botonJugar) {
             botonJugar.addEventListener('click', () => {
                 const menuInicial = document.getElementById('menuInicial');
-                if (menuInicial) menuInicial.style.display = 'none';
+                if (menuInicial) {
+                    menuInicial.style.display = 'none';
+                }
 
-                // Verificar que la versión seleccionada y las funciones existan
-                if (selectedVersion === '3d' && typeof init === 'function') {
+                if (selectedVersion === '3d' && typeof window.init === 'function') {
                     const game3dContainer = document.getElementById('game3d');
                     const game2dContainer = document.getElementById('game2d');
-                    if (game3dContainer) {
+                    if (game3dContainer && game2dContainer) {
                         game3dContainer.style.display = 'block';
-                        if (game2dContainer) game2dContainer.style.display = 'none';
-                        init(); // Iniciar juego 3D
+                        game2dContainer.style.display = 'none';
+                        window.init(); // Llamar a init del modo 3D
                     }
                 } else {
                     const game2dContainer = document.getElementById('game2d');
                     const game3dContainer = document.getElementById('game3d');
-                    if (game2dContainer) {
+                    if (game2dContainer && game3dContainer) {
                         game2dContainer.style.display = 'block';
-                        if (game3dContainer) game3dContainer.style.display = 'none';
+                        game3dContainer.style.display = 'none';
                         startGame(); // Iniciar juego 2D
                     }
                 }
