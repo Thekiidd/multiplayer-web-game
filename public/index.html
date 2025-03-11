@@ -5,13 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NeoArena: Batalla Futurista</title>
     <link rel="stylesheet" href="styles.css">
-    <!-- Three.js (se cargará condicionalmente) -->
+    <!-- Cargar Three.js primero -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <!-- Socket.IO -->
+    <!-- Socket.IO después -->
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
-    <!-- Scripts del juego (se cargarán condicionalmente) -->
-    <script src="game.js" defer></script>
+    <!-- Cargar game3d.js antes que game.js -->
     <script src="game3d.js" defer></script>
+    <script src="game.js" defer></script>
 </head>
 <body>
     <!-- Menú Inicial -->

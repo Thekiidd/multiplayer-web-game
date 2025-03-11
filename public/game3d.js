@@ -2473,3 +2473,18 @@ function showErrorMessage(message) {
 
 // Iniciar cuando se carga la página
 window.addEventListener('load', init);
+
+// Asegurarse de que init esté definida y sea accesible globalmente
+window.init = function() {
+    // ... resto del código de init ...
+}
+
+// Mover la inicialización de eventos al DOMContentLoaded
+document.addEventListener('DOMContentLoaded', () => {
+    // Configurar eventos solo si estamos en modo 3D
+    if (document.getElementById('game3d')) {
+        setupControls();
+        setupLighting();
+        setupHUD();
+    }
+});
