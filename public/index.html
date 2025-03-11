@@ -223,7 +223,27 @@
         function startGame() {
             // Lógica para iniciar el juego 2D
             console.log("Iniciando juego 2D...");
-            // Aquí puedes incluir la lógica necesaria para inicializar el juego 2D
+            
+            // Mostrar el contenedor del juego 2D
+            document.getElementById('game2d').style.display = 'block';
+            
+            // Obtener el canvas y su contexto
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Ajustar el tamaño del canvas
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            
+            // Dibujar algo básico para verificar que el canvas funciona
+            ctx.fillStyle = 'green';
+            ctx.fillRect(50, 50, 100, 100);
+            
+            ctx.fillStyle = 'white';
+            ctx.font = '20px Arial';
+            ctx.fillText('¡El juego 2D está funcionando!', 50, 180);
+            
+            // Aquí puedes agregar más lógica para inicializar el juego 2D
         }
     </script>
 </body>
